@@ -42,7 +42,7 @@ public class Main {
                 System.out.println("Endpoint rabbitmq byl zavolán!");
                 try {
                     ConnectionFactory factory = new ConnectionFactory();
-                    factory.setHost("192.168.64.4");
+                    factory.setHost("192.168.3.228");
                     factory.setPort(5672);
                     factory.setUsername("guest");
                     factory.setPassword("guest");
