@@ -1,16 +1,42 @@
 package com.dsv;
 
 import io.javalin.Javalin;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 
 public class Main {
+    private static String getServerIp() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.getHostAddress().contains(":")) continue;
+                    return addr.getHostAddress();
+                }
+            }
+        } catch (SocketException e) {
+            System.err.println("Nelze získat IP adresu: " + e.getMessage());
+        }
+        return "0.0.0.0";
+    }
+
     public static void main(String[] args) {
-        Javalin app = Javalin.create(/*config*/)
+        String serverIp = getServerIp();
+        
+        Javalin app = Javalin.create()
             .get("/", ctx -> {
                 System.out.println("Endpoint byl zavolán!");
                 ctx.result("Hello World from Javalin!");
             })
             .start(7070);
 
-        System.out.println("Server běží na http://localhost:7070");
+        System.out.println("Server běží na http://" + serverIp + ":7070");
     }
 }
