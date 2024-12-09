@@ -1,25 +1,10 @@
 package com.dsv.config;
 
+import lombok.Data;
 import java.util.Map;
 
+@Data
 public class AppConfig {
-
     private RabbitConfig rabbitmq;
     private Map<String, NodeConfig> nodes;
-
-    public AppConfig(RabbitConfig rabbitmq, Map<String, NodeConfig> nodes) {
-        this.rabbitmq = rabbitmq;
-        this.nodes = nodes;
-    }
-
-    // Default constructor for YAML
-    public AppConfig() {}
-
-    public RabbitConfig getRabbitmq() {
-        return rabbitmq;
-    }
-
-    public Map<String, NodeConfig> getNodes() {
-        return nodes;
-    }
 }
