@@ -9,23 +9,55 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Channel;
 import java.nio.charset.StandardCharsets;
+import org.yaml.snakeyaml.Yaml;
+import java.io.InputStream;
+import com.dsv.config.AppConfig;
+import com.dsv.config.NodeConfig;
+import com.dsv.config.RabbitConfig;
 
 public class Main {
     private static Channel channel;
     private static String nodeId;
+    private static AppConfig config;
     
-    private static String getQueueName(String targetNode) {
-        return targetNode + "-queue";
+    private static void loadConfig() {
+        try {
+            Yaml yaml = new Yaml();
+            InputStream inputStream = Main.class.getClassLoader()
+                .getResourceAsStream("config.yml");
+            config = yaml.loadAs(inputStream, AppConfig.class);
+        } catch (Exception e) {
+            System.err.println("Chyba při načítání konfigurace: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+    
+    private static void setupNode() {
+        String serverIp = getOwnIp();
+        NodeConfig nodeConfig = config.getNodes().get(serverIp);
+        
+        if (nodeConfig == null) {
+            System.err.println("Pro IP " + serverIp + " není konfigurace!");
+            System.exit(1);
+        }
+        
+        nodeId = nodeConfig.getId();
+        int port = nodeConfig.getPort();
+        
+        System.out.println("Node configuration loaded: " + nodeId + " on port " + port);
+        startServer(port);
     }
     
     private static void setupRabbitMQ() {
         try {
+            RabbitConfig rmqConfig = config.getRabbitmq();
+            
             ConnectionFactory factory = new ConnectionFactory();
-            factory.setHost("192.168.3.228");
-            factory.setPort(5672);
-            factory.setUsername("myuser");
-            factory.setPassword("mypassword");
-
+            factory.setHost(rmqConfig.getHost());
+            factory.setPort(rmqConfig.getPort());
+            factory.setUsername(rmqConfig.getUsername());
+            factory.setPassword(rmqConfig.getPassword());
+            
             Connection connection = factory.newConnection();
             channel = connection.createChannel();
             
@@ -46,37 +78,8 @@ public class Main {
             System.err.println("Chyba při připojování k RabbitMQ: " + e.getMessage());
         }
     }
-
-    private static String getServerIp() {
-        try {
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                NetworkInterface iface = interfaces.nextElement();
-                if (iface.isLoopback() || !iface.isUp()) continue;
-
-                Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress addr = addresses.nextElement();
-                    if (addr.getHostAddress().contains(":")) continue;
-                    return addr.getHostAddress();
-                }
-            }
-        } catch (SocketException e) {
-            System.err.println("Nelze získat IP adresu: " + e.getMessage());
-        }
-        return "0.0.0.0";
-    }
-
-    public static void main(String[] args) {
-        if (args.length < 1) {
-            System.out.println("Použití: java -jar app.jar <node1|node2>");
-            System.exit(1);
-        }
-        nodeId = args[0];
-        
-        setupRabbitMQ();
-        String serverIp = getServerIp();
-        
+    
+    private static void startServer(int port) {
         Javalin app = Javalin.create()
             .get("/", ctx -> {
                 ctx.result(nodeId + " is running!");
@@ -94,8 +97,38 @@ public class Main {
                     ctx.status(500).result("Chyba při odesílání: " + e.getMessage());
                 }
             })
-            .start(7070);
+            .start(port);
+            
+        System.out.println(nodeId + " běží na http://" + getOwnIp() + ":" + port);
+    }
 
-        System.out.println(nodeId + " běží na http://" + serverIp + ":7070");
+    public static void main(String[] args) {
+        loadConfig();
+        setupNode();
+        setupRabbitMQ();
+    }
+    
+    private static String getQueueName(String targetNode) {
+        return targetNode + "-queue";
+    }
+    
+    private static String getOwnIp() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.getHostAddress().contains(":")) continue;
+                    return addr.getHostAddress();
+                }
+            }
+        } catch (SocketException e) {
+            System.err.println("Nelze získat IP adresu: " + e.getMessage());
+        }
+        return "0.0.0.0";
     }
 }
