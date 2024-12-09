@@ -10,6 +10,9 @@ public class NodeConfig {
         this.port = port;
     }
 
+    // Default constructor for YAML
+    public NodeConfig() {}
+
     public String getId() {
         return id;
     }

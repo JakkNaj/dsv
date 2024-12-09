@@ -14,6 +14,9 @@ public class RabbitConfig {
         this.password = password;
     }
 
+    // Default constructor for YAML
+    public RabbitConfig() {}
+
     public String getHost() {
         return host;
     }

@@ -12,6 +12,9 @@ public class AppConfig {
         this.nodes = nodes;
     }
 
+    // Default constructor for YAML
+    public AppConfig() {}
+
     public RabbitConfig getRabbitmq() {
         return rabbitmq;
     }
