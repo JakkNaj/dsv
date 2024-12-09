@@ -44,8 +44,8 @@ public class Main {
                     ConnectionFactory factory = new ConnectionFactory();
                     factory.setHost("192.168.3.228");
                     factory.setPort(5672);
-                    factory.setUsername("guest");
-                    factory.setPassword("guest");
+                    factory.setUsername("myuser");
+                    factory.setPassword("mypassword");
 
                     Connection connection = factory.newConnection();
                     Channel channel = connection.createChannel();
