@@ -81,7 +81,7 @@ public class Main {
             .get("/", ctx -> {
                 ctx.result(nodeId + " is running!");
             })
-            .post("/send/:targetNode", ctx -> {
+            .post("/send/{targetNode}", ctx -> {
                 String targetNode = ctx.pathParam("targetNode");
                 String targetQueue = getQueueName(targetNode);
                 String message = ctx.body();
