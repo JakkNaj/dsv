@@ -8,17 +8,25 @@ import java.util.Enumeration;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Channel;
-import java.nio.charset.StandardCharsets;
 import org.yaml.snakeyaml.Yaml;
 import java.io.InputStream;
 import com.dsv.config.AppConfig;
 import com.dsv.config.NodeConfig;
 import com.dsv.config.RabbitConfig;
+import com.dsv.messaging.MessageService;
+import com.dsv.resource.ResourceManager;
+import lombok.extern.slf4j.Slf4j;
+import java.io.File;
+import com.dsv.controller.NodeController;
 
+@Slf4j
 public class Main {
     private static Channel channel;
     private static String nodeId;
     private static AppConfig config;
+    private static final String EXCHANGE_NAME = "nodes.topic";
+    private static MessageService messageService;
+    private static ResourceManager resourceManager;
     
     private static void loadConfig() {
         try {
@@ -48,6 +56,11 @@ public class Main {
         startServer(port);
     }
     
+    private static void setupServices() {
+        resourceManager = new ResourceManager(nodeId + "-resource", nodeId);
+        messageService = new MessageService(channel, nodeId, EXCHANGE_NAME, resourceManager);
+    }
+    
     private static void setupRabbitMQ() {
         try {
             RabbitConfig rmqConfig = config.getRabbitmq();
@@ -61,51 +74,44 @@ public class Main {
             Connection connection = factory.newConnection();
             channel = connection.createChannel();
             
-            // Vytvoříme vlastní frontu pro příjem zpráv
+            channel.exchangeDeclare(EXCHANGE_NAME, "topic", true);
             String myQueue = getQueueName(nodeId);
-            channel.queueDeclare(myQueue, false, false, false, null);
+            channel.queueDeclare(myQueue, true, false, false, null);
             
-            // Nastavíme consumera pro naši frontu
-            channel.basicQos(1);
-            channel.basicConsume(myQueue, true, (consumerTag, delivery) -> {
-                String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-                System.out.println("[" + nodeId + "] Přijata zpráva: " + message);
+            channel.queueBind(myQueue, EXCHANGE_NAME, nodeId + ".#");
+            
+            channel.basicConsume(myQueue, false, (consumerTag, delivery) -> {
+                try {
+                    messageService.handleMessage(
+                        delivery.getEnvelope().getRoutingKey(),
+                        delivery.getBody(),
+                        delivery.getProperties()
+                    );
+                    channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+                } catch (Exception e) {
+                    channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, true);
+                }
             }, consumerTag -> {});
             
             System.out.println("RabbitMQ připojení úspěšně navázáno pro " + nodeId);
             System.out.println("Poslouchám na frontě: " + myQueue);
         } catch (Exception e) {
-            System.err.println("Chyba při připojování k RabbitMQ: " + e.getMessage());
+            log.error("RabbitMQ setup error: {}", e.getMessage());
         }
     }
     
     private static void startServer(int port) {
-        Javalin app = Javalin.create()
-            .get("/", ctx -> {
-                ctx.result(nodeId + " is running!");
-            })
-            .post("/send/{targetNode}", ctx -> {
-                String targetNode = ctx.pathParam("targetNode");
-                String targetQueue = getQueueName(targetNode);
-                String message = ctx.body();
-                
-                try {
-                    channel.queueDeclare(targetQueue, false, false, false, null); // Zajistíme že fronta existuje
-                    channel.basicPublish("", targetQueue, null, message.getBytes());
-                    ctx.result("Zpráva odeslána z " + nodeId + " do " + targetNode + ": " + message);
-                } catch (Exception e) {
-                    ctx.status(500).result("Chyba při odesílání: " + e.getMessage());
-                }
-            })
-            .start(port);
-            
-        System.out.println(nodeId + " běží na http://" + getOwnIp() + ":" + port);
+        new NodeController(nodeId, messageService, resourceManager, port);
+        log.info("{} běží na http://{}:{}", nodeId, getOwnIp(), port);
     }
 
     public static void main(String[] args) {
+        new File("logs").mkdirs();
+        
         loadConfig();
         setupNode();
         setupRabbitMQ();
+        setupServices();
     }
     
     private static String getQueueName(String targetNode) {
