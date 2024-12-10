@@ -32,7 +32,8 @@ public class NodeController {
             .post("/resource/{resourceId}/request", this::requestResource)
             /* .post("/resource/{resourceId}/release", this::releaseResource) */
             .get("/resource/status", this::getResourceStatus)
-            .post("/message/{targetNodeId}", this::sendMessage)
+            .post("/message/{targetNodeId}", this::sendTestMessage)
+            .post("/slowness/{milliseconds}", this::setSlowness)
             .start(port);
     }
 
@@ -65,11 +66,11 @@ public class NodeController {
         }
     }
 
-    private void sendMessage(Context ctx) {
+    private void sendTestMessage(Context ctx) {
         String targetNodeId = ctx.pathParam("targetNodeId");
         String message = ctx.body();
         try {
-            messageService.sendMessage(targetNodeId, message);
+            messageService.sendTestMessage(targetNodeId, message);
             ctx.json(new ApiResponse(true, "Message sent to " + targetNodeId));
         } catch (Exception e) {
             log.error("Error sending message: {}", e.getMessage());
@@ -100,4 +101,14 @@ public class NodeController {
         log.info("Resources status request received");
         ctx.json(resourceManager.getResourceStatus());
     } 
+
+    private void setSlowness(Context ctx) { 
+        try {
+            long milliseconds = Long.parseLong(ctx.pathParam("milliseconds"));
+            messageService.setSlowness(milliseconds);
+            ctx.json(new ApiResponse(true, "Node slowness set to " + milliseconds + " ms"));
+        } catch (NumberFormatException e) {
+            ctx.status(400).json(new ApiResponse(false, "Invalid milliseconds value"));
+        }
+    }
 }

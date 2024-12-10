@@ -12,6 +12,8 @@ public class ResourceManager {
     private final ReentrantLock lock = new ReentrantLock();
     private String currentHolder = null;
     private final PriorityQueue<Message> requestQueue;
+
+    private int criticalValue = 666;
     
     public ResourceManager(String resourceId, String ownerId) {
         this.resourceId = resourceId;
@@ -74,5 +76,23 @@ public class ResourceManager {
             return "Resource " + resourceId + " is available";
         }
         return "Resource " + resourceId + " is held by " + currentHolder;
+    }
+
+//------------------------METODY NA HANDLE KRITICKÉ SEKCE (PROMĚNNÉ)------------------------------------
+
+    public int readValue(String requestingNodeId) {
+        if (!requestingNodeId.equals(currentHolder)) {
+            throw new IllegalStateException("Node " + requestingNodeId + " nemá přístup k resource");
+        }
+        log.info("Node {} reads value: {}", requestingNodeId, criticalValue);
+        return criticalValue;
+    }
+
+    public void writeValue(String requestingNodeId, int newValue) {
+        if (!requestingNodeId.equals(currentHolder)) {
+            throw new IllegalStateException("Node " + requestingNodeId + " nemá přístup k resource");
+        }
+        log.info("Node {} writes value: {} -> {}", requestingNodeId, criticalValue, newValue);
+        criticalValue = newValue;
     }
 } 
