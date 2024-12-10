@@ -114,8 +114,8 @@ public class Main {
         NodeConfig nodeConfig = config.getNodes().get(serverIp);
         System.setProperty("nodeId", nodeConfig.getId());
         
-        setupServices();
         setupRabbitMQ();
+        setupServices();
         setupNode();
     }
     
