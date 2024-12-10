@@ -27,6 +27,7 @@ public class Main {
     private static final String EXCHANGE_NAME = "nodes.topic";
     private static MessageService messageService;
     private static ResourceManager resourceManager;
+    private static NodeConfig nodeConfig;
     
     private static void loadConfig() {
         try {
@@ -34,25 +35,18 @@ public class Main {
             InputStream inputStream = Main.class.getClassLoader()
                 .getResourceAsStream("config.yml");
             config = yaml.loadAs(inputStream, AppConfig.class);
+            String serverIp = getOwnIp();
+            nodeConfig = config.getNodes().get(serverIp);
+            nodeId = nodeConfig.getId();
+
         } catch (Exception e) {
             System.err.println("Chyba při načítání konfigurace: " + e.getMessage());
             System.exit(1);
         }
     }
     
-    private static void setupNode() {
-        String serverIp = getOwnIp();
-        NodeConfig nodeConfig = config.getNodes().get(serverIp);
-        
-        if (nodeConfig == null) {
-            System.err.println("Pro IP " + serverIp + " není konfigurace!");
-            System.exit(1);
-        }
-        
-        nodeId = nodeConfig.getId();
+    private static void setupController() {
         int port = nodeConfig.getPort();
-        
-        System.out.println("Node configuration loaded: " + nodeId + " on port " + port);
         startServer(port);
     }
     
@@ -62,7 +56,7 @@ public class Main {
         log.info("MessageService initialized");
     }
     
-    private static void setupRabbitMQ() {
+    private static void setupRabbitMQConnection() {
         try {
             RabbitConfig rmqConfig = config.getRabbitmq();
             
@@ -75,13 +69,23 @@ public class Main {
             Connection connection = factory.newConnection();
             channel = connection.createChannel();
             
+            // Deklarace exchange
             channel.exchangeDeclare(EXCHANGE_NAME, "topic", true);
-            String myQueue = getQueueName(nodeId);
-            channel.queueDeclare(myQueue, true, false, false, null);
             
-            channel.queueBind(myQueue, EXCHANGE_NAME, nodeId + ".#");
+            log.info("RabbitMQ connection established");
+        } catch (Exception e) {
+            log.error("RabbitMQ connection error: {}", e.getMessage());
+            throw new RuntimeException("Failed to setup RabbitMQ connection", e);
+        }
+    }
+    
+    private static void setupRabbitMQConsumer() {
+        try {
+            String queueName = nodeId + "-queue";
+            channel.queueDeclare(queueName, true, false, false, null);
+            channel.queueBind(queueName, EXCHANGE_NAME, nodeId + ".#");
             
-            channel.basicConsume(myQueue, false, (consumerTag, delivery) -> {
+            channel.basicConsume(queueName, false, (consumerTag, delivery) -> {
                 try {
                     messageService.handleMessage(
                         delivery.getEnvelope().getRoutingKey(),
@@ -94,10 +98,10 @@ public class Main {
                 }
             }, consumerTag -> {});
             
-            System.out.println("RabbitMQ připojení úspěšně navázáno pro " + nodeId);
-            System.out.println("Poslouchám na frontě: " + myQueue);
+            log.info("RabbitMQ consumer setup for queue: {}", queueName);
         } catch (Exception e) {
-            log.error("RabbitMQ setup error: {}", e.getMessage());
+            log.error("RabbitMQ consumer setup error: {}", e.getMessage());
+            throw new RuntimeException("Failed to setup RabbitMQ consumer", e);
         }
     }
     
@@ -110,17 +114,10 @@ public class Main {
         new File("logs").mkdirs();
         
         loadConfig();
-        String serverIp = getOwnIp();
-        NodeConfig nodeConfig = config.getNodes().get(serverIp);
-        System.setProperty("nodeId", nodeConfig.getId());
-        
-        setupRabbitMQ();
-        setupServices();
-        setupNode();
-    }
-    
-    private static String getQueueName(String targetNode) {
-        return targetNode + "-queue";
+        setupRabbitMQConnection();  
+        setupServices();            
+        setupRabbitMQConsumer();   
+        setupController();
     }
     
     private static String getOwnIp() {
