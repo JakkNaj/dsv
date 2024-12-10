@@ -68,8 +68,13 @@ public class NodeController {
     private void sendMessage(Context ctx) {
         String targetNodeId = ctx.pathParam("targetNodeId");
         String message = ctx.body();
-        messageService.sendMessage(targetNodeId, message);
-        ctx.json(new ApiResponse(true, "Message sent to " + targetNodeId));
+        try {
+            messageService.sendMessage(targetNodeId, message);
+            ctx.json(new ApiResponse(true, "Message sent to " + targetNodeId));
+        } catch (Exception e) {
+            log.error("Error sending message: {}", e.getMessage());
+            ctx.status(500).json(new ApiResponse(false, "Failed to send message: " + e.getMessage()));
+        }
     }
 
     /* private void releaseResource(Context ctx) {

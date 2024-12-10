@@ -46,6 +46,9 @@ public class MessageService {
                     log.info("Processing RELEASE_ACCESS from node {}", message.getSenderId());
                     handleReleaseAccess(message);
                     break;
+                case CONNECTION_TEST:
+                    log.info("Processing CONNECTION_TEST from node {}", message.getSenderId());
+                    break;
                 default:
                     log.warn("Unhandled message type: {}", message.getType());
             }
@@ -129,7 +132,14 @@ public class MessageService {
         msg.setTargetId(targetNodeId);
         msg.setType(EMessageType.CONNECTION_TEST);
         msg.setTimestamp(++lamportClock);
-        msg.setResourceId(message);
-        sendMessage(msg);
+        msg.setContent(message);
+        
+        try {
+            sendMessage(msg);
+            log.info("Test message sent to {}: {}", targetNodeId, message);
+        } catch (Exception e) {
+            log.error("Failed to send test message: {}", e.getMessage());
+            throw e;
+        }
     }
 } 

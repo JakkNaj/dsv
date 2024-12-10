@@ -59,6 +59,7 @@ public class Main {
     private static void setupServices() {
         resourceManager = new ResourceManager(nodeId + "-resource", nodeId);
         messageService = new MessageService(channel, nodeId, EXCHANGE_NAME, resourceManager);
+        log.info("MessageService initialized");
     }
     
     private static void setupRabbitMQ() {
@@ -109,9 +110,9 @@ public class Main {
         new File("logs").mkdirs();
         
         loadConfig();
-        setupNode();
         setupRabbitMQ();
         setupServices();
+        setupNode();
     }
     
     private static String getQueueName(String targetNode) {
