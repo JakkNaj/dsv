@@ -110,8 +110,12 @@ public class Main {
         new File("logs").mkdirs();
         
         loadConfig();
-        setupRabbitMQ();
+        String serverIp = getOwnIp();
+        NodeConfig nodeConfig = config.getNodes().get(serverIp);
+        System.setProperty("nodeId", nodeConfig.getId());
+        
         setupServices();
+        setupRabbitMQ();
         setupNode();
     }
     
