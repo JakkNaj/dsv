@@ -31,7 +31,7 @@ public class NodeController {
             .get("/status", this::getStatus)
             .post("/resource/{resourceId}/request", this::requestResource)
             /* .post("/resource/{resourceId}/release", this::releaseResource) */
-            /* .get("/resources", this::getResourcesStatus) */
+            .get("/resource/status", this::getResourceStatus)
             .post("/message/{targetNodeId}", this::sendMessage)
             .start(port);
     }
@@ -96,8 +96,8 @@ public class NodeController {
         }
     } */
 
-    /* private void getResourcesStatus(Context ctx) {
+    private void getResourceStatus(Context ctx) {
         log.info("Resources status request received");
-        ctx.json(resourceManager.getResourcesStatus());
-    } */
+        ctx.json(resourceManager.getResourceStatus());
+    } 
 }

@@ -68,4 +68,11 @@ public class ResourceManager {
             // Notify MessageService to send GRANT_ACCESS
         }
     }
+
+    public String getResourceStatus() {
+        if (currentHolder == null) {
+            return "Resource " + resourceId + " is available";
+        }
+        return "Resource " + resourceId + " is held by " + currentHolder;
+    }
 } 

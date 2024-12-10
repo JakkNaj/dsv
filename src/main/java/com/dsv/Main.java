@@ -85,6 +85,7 @@ public class Main {
             channel.queueDeclare(queueName, true, false, false, null);
             channel.queueBind(queueName, EXCHANGE_NAME, nodeId + ".#");
             
+            channel.basicQos(1);
             channel.basicConsume(queueName, false, (consumerTag, delivery) -> {
                 try {
                     messageService.handleMessage(
