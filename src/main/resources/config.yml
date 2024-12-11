@@ -1,5 +1,5 @@
 rabbitmq:
-  host: "192.168.3.228"
+  host: "172.20.10.6"
   port: 5672
   username: "myuser"
   password: "mypassword"
@@ -8,21 +8,28 @@ nodes:
   "192.168.3.100":
     id: "node1"
     port: 7070
+    resource: true
   "192.168.3.101":
     id: "node2"
     port: 7071
+    resource: true
   "192.168.3.102":
     id: "node3"
     port: 7072 
+    resource: true
   "192.168.3.103":
     id: "node4"
-    port: 7073 
+    port: 7073
+    resource: true
   "192.168.3.104":
     id: "node5"
     port: 7074 
-  "192.168.3.105":
+    resource: true
+  "172.20.10.7":
     id: "node6"
-    port: 7075 
-  "192.168.3.176":
-    id: "macnode7"
     port: 7076 
+    resource: false
+  "172.20.10.5":
+    id: "macnode7"
+    port: 7077 
+    resource: false

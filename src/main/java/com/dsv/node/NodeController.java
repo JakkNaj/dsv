@@ -1,7 +1,5 @@
-package com.dsv.controller;
+package com.dsv.node;
 
-import com.dsv.messaging.MessageService;
-import com.dsv.resource.ResourceManager;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import lombok.extern.slf4j.Slf4j;
@@ -13,13 +11,11 @@ import io.javalin.json.JavalinJackson;
 public class NodeController {
     private final Javalin app;
     private final String nodeId;
-    private final MessageService messageService;
-    private final ResourceManager resourceManager;
+    private final NodeMessageService messageService;
 
-    public NodeController(String nodeId, MessageService messageService, ResourceManager resourceManager, int port) {
+    public NodeController(String nodeId, NodeMessageService messageService, int port) {
         this.nodeId = nodeId;
         this.messageService = messageService;
-        this.resourceManager = resourceManager;
         this.app = setupServer(port);
     }
 
@@ -31,7 +27,6 @@ public class NodeController {
             .get("/status", this::getStatus)
             .post("/resource/{resourceId}/request", this::requestResource)
             /* .post("/resource/{resourceId}/release", this::releaseResource) */
-            .get("/resource/status", this::getResourceStatus)
             .post("/message/{targetNodeId}", this::sendTestMessage)
             .post("/slowness/{milliseconds}", this::setSlowness)
             .start(port);
@@ -77,30 +72,6 @@ public class NodeController {
             ctx.status(500).json(new ApiResponse(false, "Failed to send message: " + e.getMessage()));
         }
     }
-
-    /* private void releaseResource(Context ctx) {
-        String resourceId = ctx.pathParam("resourceId");
-        log.info("Resource release request received for resource: {}", resourceId);
-        
-        try {
-            messageService.releaseAccess(resourceId);
-            ctx.json(new ApiResponse(
-                true,
-                "Resource " + resourceId + " released"
-            ));
-        } catch (Exception e) {
-            log.error("Error releasing resource: {}", e.getMessage());
-            ctx.status(500).json(new ApiResponse(
-                false,
-                "Failed to release resource: " + e.getMessage()
-            ));
-        }
-    } */
-
-    private void getResourceStatus(Context ctx) {
-        log.info("Resources status request received");
-        ctx.json(resourceManager.getResourceStatus());
-    } 
 
     private void setSlowness(Context ctx) { 
         try {
