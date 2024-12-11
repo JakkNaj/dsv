@@ -38,15 +38,20 @@ public class NodeMessageService {
             updateLamportClock(message.getTimestamp());
             
             switch (message.getType()) {
+                case REQUEST_ACCESS:
+                    log.info("Processing REQUEST_ACCESS from node {}", message.getSenderId());
+                    requestAccess(message.getResourceId());
+                    break;
                 case GRANT_ACCESS:
-                    log.info("Processing GRANT_ACCESS from node {}", message.getSenderId());
+                    log.info("Processing GRANT_ACCESS from resource {}", message.getSenderId());
                     handleGrantAccess(message);
                     break;
                 case DENY_ACCESS:
-                    log.info("Processing DENY_ACCESS from node {}", message.getSenderId());
+                    log.info("Processing DENY_ACCESS from resource {}", message.getSenderId());
+                    //TODO: reakce na odepření přístupu ke ZDROJI
                     break;
                 case VALUE_RESPONSE:
-                    log.info("Processing VALUE_RESPONSE from node {}", message.getSenderId());
+                    log.info("Processing VALUE_RESPONSE from resource {}", message.getSenderId());
                     handleValueResponse(message);
                     break;
                 case CONNECTION_TEST:
@@ -59,17 +64,42 @@ public class NodeMessageService {
             log.error("Error processing message in node: {}", e.getMessage(), e);
         }
     }
-
-    private void simulateSlowness() {
-        if (slowness > 0) {
-            try {
-                Thread.sleep(slowness);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+    
+// ----------------------- Metoda pro posílání zpráv do node queue -----------------------
+    private void sendNodeMessage(Message message) {
+        try {
+            String routingKey = message.getTargetId() + ".node." + 
+                message.getType().toString().toLowerCase();
+            
+            log.info("Node sending message to node: type={}, to={}, timestamp={}", 
+                message.getType(), message.getTargetId(), message.getTimestamp());
+            
+            channel.basicPublish(exchangeName, routingKey, null,
+                objectMapper.writeValueAsBytes(message));
+        } catch (Exception e) {
+            log.error("Error sending message to node: {}", e.getMessage(), e);
         }
     }
+
+// ----------------------- Metoda pro posílání zpráv do resource queue -----------------------
+    private void sendResourceMessage(Message message) {
+        try {
+            String routingKey = message.getTargetId() + ".resource." + 
+                message.getType().toString().toLowerCase();
+            
+            log.info("Node sending message to resource: type={}, to={}, timestamp={}", 
+                message.getType(), message.getTargetId(), message.getTimestamp());
+            
+            channel.basicPublish(exchangeName, routingKey, null,
+                objectMapper.writeValueAsBytes(message));
+        } catch (Exception e) {
+            log.error("Error sending message to resource: {}", e.getMessage(), e);
+        }
+    }
+
+// ----------------------- Metody pro zpracování zpráv ---------------------------------------
     
+    // požádání o přidělení ZDROJE
     public void requestAccess(String resourceId) {
         simulateSlowness();
         Message request = new Message();
@@ -77,12 +107,12 @@ public class NodeMessageService {
         request.setType(EMessageType.REQUEST_ACCESS);
         request.setTimestamp(++lamportClock);
         request.setResourceId(resourceId);
-        
-        // Send to resource exchange
         request.setTargetId(resourceId);
-        sendMessage(request);
+        
+        sendResourceMessage(request);
     }
 
+    // reakce na získání přístupu ke ZDROJI
     private void handleGrantAccess(Message message) {
         try {
             Thread.sleep(2000); // Wait before reading critical value
@@ -93,13 +123,15 @@ public class NodeMessageService {
             readRequest.setType(EMessageType.READ_CRITIC_VALUE);
             readRequest.setTimestamp(++lamportClock);
             readRequest.setResourceId(message.getResourceId());
-            sendMessage(readRequest);
+            
+            sendResourceMessage(readRequest);
             
         } catch (Exception e) {
             log.error("Error handling GRANT_ACCESS: {}", e.getMessage());
         }
     }
 
+    // reakce na získání hodnoty kritické sekce ze ZDROJE
     private void handleValueResponse(Message message) {
         try {
             int value = Integer.parseInt(message.getContent());
@@ -114,32 +146,15 @@ public class NodeMessageService {
             release.setType(EMessageType.RELEASE_ACCESS);
             release.setTimestamp(++lamportClock);
             release.setResourceId(message.getResourceId());
-            sendMessage(release);
+            
+            sendResourceMessage(release);
             
         } catch (Exception e) {
             log.error("Error handling VALUE_RESPONSE: {}", e.getMessage());
         }
     }
 
-    private void sendMessage(Message message) {
-        try {
-            String routingKey = message.getTargetId() + ".node." + 
-                message.getType().toString().toLowerCase();
-            
-            log.info("Node sending message: type={}, to={}, timestamp={}", 
-                message.getType(), message.getTargetId(), message.getTimestamp());
-            
-            channel.basicPublish(exchangeName, routingKey, null,
-                objectMapper.writeValueAsBytes(message));
-        } catch (Exception e) {
-            log.error("Error sending message from node: {}", e.getMessage(), e);
-        }
-    }
-    
-    private void updateLamportClock(long messageTimestamp) {
-        lamportClock = Math.max(lamportClock, messageTimestamp) + 1;
-    }
-
+    // testovací zpráva pro testování komunikace mezi nody
     public void sendTestMessage(String targetNodeId, String content) {
         simulateSlowness();
         Message msg = new Message();
@@ -149,6 +164,20 @@ public class NodeMessageService {
         msg.setTimestamp(++lamportClock);
         msg.setContent(content);
         
-        sendMessage(msg);
+        sendNodeMessage(msg);
+    }
+
+    private void simulateSlowness() {
+        if (slowness > 0) {
+            try {
+                Thread.sleep(slowness);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void updateLamportClock(long messageTimestamp) {
+        lamportClock = Math.max(lamportClock, messageTimestamp) + 1;
     }
 }

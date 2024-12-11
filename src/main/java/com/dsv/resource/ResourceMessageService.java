@@ -59,11 +59,40 @@ public class ResourceMessageService {
         }
     }
 
+    private void sendNodeMessage(Message message) {
+        try {
+            String routingKey = message.getTargetId() + ".node." + 
+                message.getType().toString().toLowerCase();
+            
+            log.info("Resource sending message to node: type={}, to={}, timestamp={}", 
+                message.getType(), message.getTargetId(), message.getTimestamp());
+            
+            channel.basicPublish(exchangeName, routingKey, null,
+                objectMapper.writeValueAsBytes(message));
+        } catch (Exception e) {
+            log.error("Error sending message to node: {}", e.getMessage(), e);
+        }
+    }
+
     private void handleRequestAccess(Message message) {
         if (resourceManager.canGrantAccess(message)) {
-            sendGrantAccess(message.getSenderId());
+            Message response = new Message();
+            response.setSenderId(resourceId);
+            response.setTargetId(message.getSenderId());
+            response.setType(EMessageType.GRANT_ACCESS);
+            response.setTimestamp(++lamportClock);
+            response.setResourceId(resourceId);
+            
+            sendNodeMessage(response);
         } else {
-            sendDenyAccess(message.getSenderId());
+            Message response = new Message();
+            response.setSenderId(resourceId);
+            response.setTargetId(message.getSenderId());
+            response.setType(EMessageType.DENY_ACCESS);
+            response.setTimestamp(++lamportClock);
+            response.setResourceId(resourceId);
+            
+            sendNodeMessage(response);
         }
     }
     
@@ -80,7 +109,9 @@ public class ResourceMessageService {
             response.setTargetId(message.getSenderId());
             response.setContent(String.valueOf(value));
             response.setResourceId(resourceId);
-            sendMessage(response);
+            response.setTimestamp(++lamportClock);
+            
+            sendNodeMessage(response);
         } catch (Exception e) {
             log.error("Error reading critical value: {}", e.getMessage());
         }
@@ -92,41 +123,6 @@ public class ResourceMessageService {
                 Integer.parseInt(message.getContent()));
         } catch (Exception e) {
             log.error("Error writing critical value: {}", e.getMessage());
-        }
-    }
-    
-    private void sendGrantAccess(String targetNodeId) {
-        Message response = new Message();
-        response.setSenderId(resourceId);
-        response.setTargetId(targetNodeId);
-        response.setType(EMessageType.GRANT_ACCESS);
-        response.setTimestamp(++lamportClock);
-        
-        sendMessage(response);
-    }
-    
-    private void sendDenyAccess(String targetNodeId) {
-        Message response = new Message();
-        response.setSenderId(resourceId);
-        response.setTargetId(targetNodeId);
-        response.setType(EMessageType.DENY_ACCESS);
-        response.setTimestamp(++lamportClock);
-        
-        sendMessage(response);
-    }
-    
-    private void sendMessage(Message message) {
-        try {
-            String routingKey = message.getTargetId() + ".resource." + 
-                message.getType().toString().toLowerCase();
-            
-            log.info("Resource sending message: type={}, to={}, timestamp={}", 
-                message.getType(), message.getTargetId(), message.getTimestamp());
-            
-            channel.basicPublish(exchangeName, routingKey, null,
-                objectMapper.writeValueAsBytes(message));
-        } catch (Exception e) {
-            log.error("Error sending message from resource: {}", e.getMessage(), e);
         }
     }
     
