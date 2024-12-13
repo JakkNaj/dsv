@@ -16,6 +16,8 @@ public class ResourceMessageService {
     private final ObjectMapper objectMapper;
     private long lamportClock;
     
+    private static final String NODE_EXCHANGE = "nodes.topic";
+    
     public ResourceMessageService(Channel channel, String resourceId, String exchangeName, 
                                 ResourceManager resourceManager) {
         this.channel = channel;
@@ -67,11 +69,15 @@ public class ResourceMessageService {
             log.info("Resource sending message to node: type={}, to={}, timestamp={}", 
                 message.getType(), message.getTargetId(), message.getTimestamp());
             
-            channel.basicPublish(exchangeName, routingKey, null,
+            channel.basicPublish(NODE_EXCHANGE, routingKey, null,
                 objectMapper.writeValueAsBytes(message));
         } catch (Exception e) {
             log.error("Error sending message to node: {}", e.getMessage(), e);
         }
+    }
+
+    private void handleTestAccess(Message message) {
+        log.info("Resource received TEST_ACCESS from node {}", message.getSenderId());
     }
 
     private void handleRequestAccess(Message message) {

@@ -23,12 +23,15 @@ public class Resource {
         setupQueue();
         this.resourceManager = new ResourceManager(resourceId, ownerId);
         this.messageService = new ResourceMessageService(channel, resourceId, exchangeName, resourceManager);
-        log.info("Resource {} initialized with manager", resourceId);
+        log.info("Resource {} initialized with resource manager", resourceId);
     }
     
     private void setupQueue() {
         try {
-            String queueName = resourceId + "-resource-queue";
+            // Deklarace exchange pro resource
+            channel.exchangeDeclare(exchangeName, "topic", true);
+            
+            String queueName = resourceId + "-queue";
             
             // Deklarace queue
             channel.queueDeclare(queueName, true, false, false, null);

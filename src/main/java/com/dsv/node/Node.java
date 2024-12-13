@@ -26,6 +26,9 @@ public class Node {
     
     private void setupQueue() {
         try {
+            // Deklarace exchange pro node
+            channel.exchangeDeclare(exchangeName, "topic", true);
+            
             String queueName = nodeId + "-node-queue";
             
             // Deklarace queue

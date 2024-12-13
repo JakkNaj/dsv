@@ -21,6 +21,8 @@ public class NodeMessageService {
     @Setter
     private long slowness = 0;
     
+    private static final String RESOURCE_EXCHANGE = "resources.topic";
+    
     public NodeMessageService(Channel channel, String nodeId, String exchangeName) {
         this.channel = channel;
         this.nodeId = nodeId;
@@ -90,7 +92,7 @@ public class NodeMessageService {
             log.info("Node sending message to resource: type={}, to={}, timestamp={}", 
                 message.getType(), message.getTargetId(), message.getTimestamp());
             
-            channel.basicPublish(exchangeName, routingKey, null,
+            channel.basicPublish(RESOURCE_EXCHANGE, routingKey, null,
                 objectMapper.writeValueAsBytes(message));
         } catch (Exception e) {
             log.error("Error sending message to resource: {}", e.getMessage(), e);
@@ -114,7 +116,8 @@ public class NodeMessageService {
 
     // reakce na získání přístupu ke ZDROJI
     private void handleGrantAccess(Message message) {
-        try {
+        log.info("Node received GRANT_ACCESS from resource {}", message.getSenderId());
+        /* try {
             Thread.sleep(2000); // Wait before reading critical value
             
             Message readRequest = new Message();
@@ -128,7 +131,7 @@ public class NodeMessageService {
             
         } catch (Exception e) {
             log.error("Error handling GRANT_ACCESS: {}", e.getMessage());
-        }
+        } */
     }
 
     // reakce na získání hodnoty kritické sekce ze ZDROJE
