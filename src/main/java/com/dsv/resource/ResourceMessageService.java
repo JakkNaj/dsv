@@ -10,13 +10,14 @@ import java.util.Queue;
 import java.util.PriorityQueue;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
+import java.util.LinkedList;
 
 @Slf4j
 public class ResourceMessageService {
     private final Channel channel;
     private final String resourceId;
     private final ObjectMapper objectMapper;
-    private final PriorityQueue<Message> resourceQueue;
+    private final Queue<String> resourceQueue;
     
     private static final String NODE_EXCHANGE = "nodes.topic";
     
@@ -24,20 +25,14 @@ public class ResourceMessageService {
         this.channel = channel;
         this.resourceId = resourceId;
         this.objectMapper = new ObjectMapper();
-        this.resourceQueue = new PriorityQueue<>((m1, m2) -> {
-            int timestampCompare = Long.compare(m1.getTimestamp(), m2.getTimestamp());
-            if (timestampCompare == 0) {
-                return m1.getSenderId().compareTo(m2.getSenderId());
-            }
-            return timestampCompare;
-        });
+        this.resourceQueue = new LinkedList<>();
     }
     
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
         try {
             Message message = objectMapper.readValue(new String(body), Message.class);
-            log.info("Resource received message: type={}, from={}, timestamp={}", 
-                message.getType(), message.getSenderId(), message.getTimestamp());
+            log.info("Resource received message: type={}, from={}", 
+                message.getType(), message.getSenderId());
                         
             switch (message.getType()) {
                 case REQUEST_ACCESS:
@@ -65,8 +60,8 @@ public class ResourceMessageService {
             String routingKey = message.getTargetId() + ".node." + 
                 message.getType().toString().toLowerCase();
             
-            log.info("Resource sending message to node: type={}, to={}, timestamp={}", 
-                message.getType(), message.getTargetId(), message.getTimestamp());
+            log.info("Resource sending message to node: type={}, to={}", 
+                message.getType(), message.getTargetId());
             
             channel.basicPublish(NODE_EXCHANGE, routingKey, null,
                 objectMapper.writeValueAsBytes(message));
@@ -77,7 +72,7 @@ public class ResourceMessageService {
 
     private void handleRequestAccess(Message message) {
         try {
-            resourceQueue.add(message);
+            resourceQueue.add(message.getSenderId());
             
             Message response = new Message();
             response.setSenderId(resourceId);
@@ -89,17 +84,9 @@ public class ResourceMessageService {
                 new ArrayList<>(resourceQueue)
             ));
             
-            log.info("Resource {} received request from node {} with timestamp {}", 
-                resourceId, 
-                message.getSenderId(),
-                message.getTimestamp());
-            
             log.info("Current queue state for resource {}: {}", 
                 resourceId,
-                resourceQueue.stream()
-                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
-                    .collect(Collectors.joining(", "))
-            );
+                String.join(", ", resourceQueue));
             
             sendNodeMessage(response);
         } catch (Exception e) {
@@ -109,7 +96,7 @@ public class ResourceMessageService {
 
     private void handleReleaseAccess(Message message) {
         try {
-            if (!resourceQueue.peek().getSenderId().equals(message.getSenderId())) {
+            if (!resourceQueue.peek().equals(message.getSenderId())) {
                 log.warn("Received RELEASE_ACCESS from node {} but it's not first in queue", 
                     message.getSenderId());
                 return;
@@ -125,8 +112,8 @@ public class ResourceMessageService {
                 new ArrayList<>(resourceQueue)
             ));
             
-            for (Message msg : resourceQueue) {
-                queueUpdate.setTargetId(msg.getSenderId());
+            for (String msg : resourceQueue) {
+                queueUpdate.setTargetId(msg);
                 sendNodeMessage(queueUpdate);
             }
             

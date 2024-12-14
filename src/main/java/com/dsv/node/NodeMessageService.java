@@ -12,11 +12,12 @@ import lombok.Setter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
-import java.util.PriorityQueue;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.stream.Collectors;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Queue;
+import java.util.LinkedList;
 
 @Slf4j
 public class NodeMessageService {
@@ -24,10 +25,9 @@ public class NodeMessageService {
     private final String nodeId;
     private final String exchangeName;
     private final ObjectMapper objectMapper;
-    private final Map<String, PriorityQueue<Message>> resourceQueues;
+    private final Map<String, Queue<String>> resourceQueues;
     private Set<String> requestedResources;
     private Set<String> receivedQueues;
-    private long lamportClock = 0;
 
     @Getter
     @Setter
@@ -49,21 +49,12 @@ public class NodeMessageService {
         this.receivedQueues = new HashSet<>();
     }
 
-    private void updateLamportClock(long messageTimestamp) {
-        lamportClock = Math.max(lamportClock, messageTimestamp) + 1;
-    }
-
-    private long getNextLamportTimestamp() {
-        return ++lamportClock;
-    }
-
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
         try {
             Message message = objectMapper.readValue(new String(body), Message.class);
-            updateLamportClock(message.getTimestamp());
             
-            log.info("Node received message: type={}, from={}, timestamp={}", 
-                message.getType(), message.getSenderId(), message.getTimestamp());
+            log.info("Node received message: type={}, from={}", 
+                message.getType(), message.getSenderId());
                         
             switch (message.getType()) {
                 case REQUEST_ACCESS:
@@ -90,8 +81,8 @@ public class NodeMessageService {
             String routingKey = message.getTargetId() + ".node." + 
                 message.getType().toString().toLowerCase();
             
-            log.info("Node sending message to node: type={}, to={}, timestamp={}", 
-                message.getType(), message.getTargetId(), message.getTimestamp());
+            log.info("Node sending message to node: type={}, to={}", 
+                message.getType(), message.getTargetId());
             
             channel.basicPublish(exchangeName, routingKey, null,
                 objectMapper.writeValueAsBytes(message));
@@ -106,8 +97,8 @@ public class NodeMessageService {
             String routingKey = message.getTargetId() + ".resource." + 
                 message.getType().toString().toLowerCase();
             
-            log.info("Node sending message to resource: type={}, to={}, timestamp={}", 
-                message.getType(), message.getTargetId(), message.getTimestamp());
+            log.info("Node sending message to resource: type={}, to={}", 
+                message.getType(), message.getTargetId());
             
             channel.basicPublish(RESOURCE_EXCHANGE, routingKey, null,
                 objectMapper.writeValueAsBytes(message));
@@ -129,7 +120,6 @@ public class NodeMessageService {
         request.setType(EMessageType.REQUEST_ACCESS);
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
-        request.setTimestamp(getNextLamportTimestamp());
 
         nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         sendResourceMessage(request);
@@ -143,30 +133,23 @@ public class NodeMessageService {
 
         simulateSlowness();
         
-        long commonTimestamp = getNextLamportTimestamp();
-        
         requestedResources.clear();
         receivedQueues.clear();
         requestedResources.addAll(resourceIds);
         
         nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         
-        List<Message> requests = resourceIds.stream()
-            .map(resourceId -> {
-                Message request = new Message();
-                request.setSenderId(nodeId);
-                request.setType(EMessageType.REQUEST_ACCESS);
-                request.setResourceId(resourceId);
-                request.setTargetId(resourceId);
-                request.setTimestamp(commonTimestamp);
-                return request;
-            })
-            .collect(Collectors.toList());
+        // Vytvoření a odeslání zpráv
+        resourceIds.forEach(resourceId -> {
+            Message request = new Message();
+            request.setSenderId(nodeId);
+            request.setType(EMessageType.REQUEST_ACCESS);
+            request.setResourceId(resourceId);
+            request.setTargetId(resourceId);
+            sendResourceMessage(request);
+        });
         
-        requests.forEach(this::sendResourceMessage);
-        
-        log.info("Sent batch resource requests with timestamp {} for resources: {}", 
-            commonTimestamp, resourceIds);
+        log.info("Sent batch resource requests for resources: {}", resourceIds);
     }
 
     // testovací zpráva pro testování komunikace mezi nody
@@ -177,7 +160,6 @@ public class NodeMessageService {
         msg.setTargetId(targetNodeId);
         msg.setType(EMessageType.CONNECTION_TEST);
         msg.setContent(content);
-        msg.setTimestamp(getNextLamportTimestamp());
         sendNodeMessage(msg);
     }
 
@@ -193,13 +175,13 @@ public class NodeMessageService {
 
     // Pomocná metoda pro kontrolu, zda může node vstoupit do kritické sekce
     private boolean canEnterCriticalSection(String resourceId) {
-        PriorityQueue<Message> queue = resourceQueues.get(resourceId);
+        Queue<String> queue = resourceQueues.get(resourceId);
         if (queue == null || queue.isEmpty()) {
             log.warn("No queue found for resource {} or queue is empty", resourceId);
             return false;
         }
         
-        return queue.peek().getSenderId().equals(nodeId);
+        return queue.peek().equals(nodeId);
     }
 
     // vstup do kritické sekce (používání zdroje)
@@ -238,7 +220,7 @@ public class NodeMessageService {
         releaseMessage.setResourceId(resourceId);
         
         sendResourceMessage(releaseMessage);
-        PriorityQueue<Message> queue = resourceQueues.get(resourceId);
+        Queue<String> queue = resourceQueues.get(resourceId);
         queue.poll();
         
         requestedResources.remove(resourceId);
@@ -255,30 +237,20 @@ public class NodeMessageService {
     // zpracování zprávy o aktualizaci fronty (grafu závislosti)
     private void handleQueueUpdate(Message message) {
         try {
-            List<Message> queueData = objectMapper.readValue(
+            List<String> queueData = objectMapper.readValue(
                 message.getContent(), 
-                new TypeReference<List<Message>>() {}
+                new TypeReference<List<String>>() {}
             );
             
-            PriorityQueue<Message> queue = new PriorityQueue<>((m1, m2) -> {
-                int timestampCompare = Long.compare(m1.getTimestamp(), m2.getTimestamp());
-                if (timestampCompare == 0) {
-                    return m1.getSenderId().compareTo(m2.getSenderId());
-                }
-                return timestampCompare;
-            });
+            Queue<String> queue = new LinkedList<>();
             queue.addAll(queueData);
             
             resourceQueues.put(message.getResourceId(), queue);
-            
             receivedQueues.add(message.getResourceId());
             
             log.info("Updated queue for resource {}: {}", 
                 message.getResourceId(), 
-                queue.stream()
-                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
-                    .collect(Collectors.joining(", "))
-            );
+                String.join(", ", queueData));
             
             if (nodeStatus == ENodeStatus.WAITING_FOR_RESOURCES_QUEUES && 
                 receivedQueues.containsAll(requestedResources)) {
@@ -294,10 +266,7 @@ public class NodeMessageService {
 
     public String getResourceQueues() {
         return resourceQueues.entrySet().stream()
-            .map(entry -> entry.getKey() + ": " + 
-                entry.getValue().stream()
-                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
-                    .collect(Collectors.joining(", ")))
+            .map(entry -> entry.getKey() + ": " + String.join(", ", entry.getValue()))
             .collect(Collectors.joining("\n"));
     }
 }
