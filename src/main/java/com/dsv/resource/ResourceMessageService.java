@@ -93,9 +93,35 @@ public class ResourceMessageService {
     }
 
     private void handleReleaseAccess(Message message) {
-        //TODO: implementace uvolnění zdroje
+        try {
+            if (!resourceQueue.peek().equals(message.getSenderId())) {
+                log.warn("Received RELEASE_ACCESS from node {} but it's not first in queue", 
+                    message.getSenderId());
+                return;
+            }
+            
+            resourceQueue.poll();
+            
+            Message queueUpdate = new Message();
+            queueUpdate.setSenderId(resourceId);
+            queueUpdate.setType(EMessageType.QUEUE_UPDATE);
+            queueUpdate.setResourceId(resourceId);
+            queueUpdate.setContent(objectMapper.writeValueAsString(
+                new ArrayList<>(resourceQueue)
+            ));
+            
+            for (String nodeId : resourceQueue) {
+                queueUpdate.setTargetId(nodeId);
+                sendNodeMessage(queueUpdate);
+            }
+            
+            log.info("Resource {} queue updated after release from {}: {}", 
+                resourceId, message.getSenderId(), resourceQueue);
+            
+        } catch (Exception e) {
+            log.error("Error handling release access: {}", e.getMessage(), e);
+        }
     }
-
 
     private void handleTestAccess(Message message) {
         log.info("Resource received CONNECTION_TEST from node {}", message.getSenderId());

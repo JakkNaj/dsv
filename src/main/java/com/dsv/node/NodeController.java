@@ -138,6 +138,19 @@ public class NodeController {
     private void exitCriticalSection(Context ctx) {
         String resourceId = ctx.pathParam("resourceId");
         log.info("Request to exit critical section for resource: {}", resourceId);
-        //TODO: implementace opuštění kritické sekce
+        
+        try {
+            messageService.exitCriticalSection(resourceId);
+            ctx.status(200).json(new ApiResponse(
+                true,
+                "Exited critical section for " + resourceId
+            ));
+        } catch (Exception e) {
+            log.error("Error exiting critical section: {}", e.getMessage());
+            ctx.status(500).json(new ApiResponse(
+                false,
+                "Failed to exit critical section: " + e.getMessage()
+            ));
+        }
     }
 }

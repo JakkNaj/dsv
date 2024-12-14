@@ -146,10 +146,48 @@ public class NodeMessageService {
         sendResourceMessage(request);
     }
 
-    // Nová metoda pro vstup do kritické sekce
+    // Pomocná metoda pro kontrolu, zda můžeme vstoupit do kritické sekce
+    private boolean canEnterCriticalSection(String resourceId) {
+        Queue<String> queue = resourceQueues.get(resourceId);
+        if (queue == null || queue.isEmpty()) {
+            log.warn("No queue found for resource {} or queue is empty", resourceId);
+            return false;
+        }
+        
+        // Kontrola, zda jsme první ve frontě
+        return queue.peek().equals(nodeId);
+    }
+
+    // Metoda pro vstup do kritické sekce
     public boolean enterCriticalSection(String resourceId) {
-        //TODO: vstup do kritické sekce
+        if (!canEnterCriticalSection(resourceId)) {
+            log.info("Node {} cannot enter critical section for resource {}, not first in queue", 
+                nodeId, resourceId);
+            nodeStatus = ENodeStatus.WAITING;
+            return false;
+        }
+        
+        log.info("WORKING WITH RESOURCE {}", resourceId);
+        nodeStatus = ENodeStatus.WORKING;
         return true;
+    }
+
+    // Metoda pro opuštění kritické sekce
+    public void exitCriticalSection(String resourceId) {
+        if (nodeStatus != ENodeStatus.WORKING) {
+            log.warn("Attempting to exit critical section while not in WORKING state");
+            return;
+        }
+        
+        Message releaseMessage = new Message();
+        releaseMessage.setSenderId(nodeId);
+        releaseMessage.setTargetId(resourceId);
+        releaseMessage.setType(EMessageType.RELEASE_ACCESS);
+        releaseMessage.setResourceId(resourceId);
+        
+        sendResourceMessage(releaseMessage);
+        nodeStatus = ENodeStatus.IDLE;
+        log.info("Node {} released resource {}", nodeId, resourceId);
     }
 
     private void handleQueueUpdate(Message message) {
