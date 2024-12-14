@@ -29,6 +29,14 @@ nodes:
     id: "macnode6"
     port: 7075
     resource: true
+  "192.168.3.61":
+    id: "node61"
+    port: 7061
+    resource: true
+  "192.168.3.62":
+    id: "node62"
+    port: 7062
+    resource: true
 
   "172.20.10.7":
     id: "node6"
