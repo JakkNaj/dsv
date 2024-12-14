@@ -10,11 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.Getter;
 import lombok.Setter;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
-import java.util.LinkedList;
+import java.util.PriorityQueue;
 import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class NodeMessageService {
@@ -22,7 +22,7 @@ public class NodeMessageService {
     private final String nodeId;
     private final String exchangeName;
     private final ObjectMapper objectMapper;
-    private final Map<String, Queue<String>> resourceQueues; //queue for each resource
+    private final Map<String, PriorityQueue<Message>> resourceQueues;
 
     @Getter
     @Setter
@@ -148,14 +148,14 @@ public class NodeMessageService {
 
     // Pomocná metoda pro kontrolu, zda můžeme vstoupit do kritické sekce
     private boolean canEnterCriticalSection(String resourceId) {
-        Queue<String> queue = resourceQueues.get(resourceId);
+        PriorityQueue<Message> queue = resourceQueues.get(resourceId);
         if (queue == null || queue.isEmpty()) {
             log.warn("No queue found for resource {} or queue is empty", resourceId);
             return false;
         }
         
         // Kontrola, zda jsme první ve frontě
-        return queue.peek().equals(nodeId);
+        return queue.peek().getSenderId().equals(nodeId);
     }
 
     // Metoda pro vstup do kritické sekce
@@ -186,7 +186,7 @@ public class NodeMessageService {
         releaseMessage.setResourceId(resourceId);
         
         sendResourceMessage(releaseMessage);
-        Queue<String> queue = resourceQueues.get(resourceId);
+        PriorityQueue<Message> queue = resourceQueues.get(resourceId);
         queue.poll();
         nodeStatus = ENodeStatus.IDLE;
         log.info("Node {} released resource {}", nodeId, resourceId);
@@ -194,22 +194,27 @@ public class NodeMessageService {
 
     private void handleQueueUpdate(Message message) {
         try {
-            // Deserializace fronty ze zprávy
-            List<String> queueData = objectMapper.readValue(
+            List<Message> queueData = objectMapper.readValue(
                 message.getContent(), 
-                new TypeReference<List<String>>() {}
+                new TypeReference<List<Message>>() {}
             );
             
-            // Vytvoření nové fronty a naplnění daty
-            Queue<String> queue = new LinkedList<>();
+            PriorityQueue<Message> queue = new PriorityQueue<>((m1, m2) -> {
+                int timestampCompare = Long.compare(m1.getTimestamp(), m2.getTimestamp());
+                if (timestampCompare == 0) {
+                    return m1.getSenderId().compareTo(m2.getSenderId());
+                }
+                return timestampCompare;
+            });
             queue.addAll(queueData);
             
-            // Uložení fronty do mapy pod příslušným resourceId
             resourceQueues.put(message.getResourceId(), queue);
             
             log.info("Updated queue for resource {}: {}", 
                 message.getResourceId(), 
-                String.join(", ", queueData)
+                queue.stream()
+                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
+                    .collect(Collectors.joining(", "))
             );
         } catch (Exception e) {
             log.error("Error handling queue update: {}", e.getMessage(), e);
@@ -219,6 +224,39 @@ public class NodeMessageService {
 // ----------------------- Gettery a settery ---------------------------------------------
 
     public String getResourceQueues() {
-        return resourceQueues.toString();
+        return resourceQueues.entrySet().stream()
+            .map(entry -> entry.getKey() + ": " + 
+                entry.getValue().stream()
+                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
+                    .collect(Collectors.joining(", ")))
+            .collect(Collectors.joining("\n"));
+    }
+
+    // Přidání metody pro hromadné žádosti
+    public void requestMultipleResources(List<String> resourceIds) {
+        simulateSlowness();
+        
+        // Vytvoření společného timestampu pro všechny zprávy
+        long commonTimestamp = System.currentTimeMillis();
+        
+        // Vytvoření všech zpráv se stejným timestampem
+        List<Message> requests = resourceIds.stream()
+            .map(resourceId -> {
+                Message request = new Message();
+                request.setSenderId(nodeId);
+                request.setType(EMessageType.REQUEST_ACCESS);
+                request.setResourceId(resourceId);
+                request.setTargetId(resourceId);
+                request.setTimestamp(commonTimestamp);
+                return request;
+            })
+            .collect(Collectors.toList());
+        
+        // Odeslání všech zpráv
+        requests.forEach(this::sendResourceMessage);
+        
+        log.info("Sent batch resource requests with timestamp {} for resources: {}", 
+            commonTimestamp, 
+            resourceIds);
     }
 }

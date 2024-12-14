@@ -10,12 +10,17 @@ import com.dsv.model.ApiResponse;
 import com.dsv.model.ENodeStatus;
 
 import io.javalin.json.JavalinJackson;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.List;
 
 @Slf4j
 public class NodeController {
     private final Javalin app;
     private final String nodeId;
     private final NodeMessageService messageService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public NodeController(String nodeId, NodeMessageService messageService, int port) {
         this.nodeId = nodeId;
@@ -36,6 +41,7 @@ public class NodeController {
             .post("/resource/{resourceId}/preliminary", this::sendPreliminaryRequest)
             .post("/resource/{resourceId}/enter", this::enterCriticalSection)
             .post("/resource/{resourceId}/exit", this::exitCriticalSection)
+            .post("/resources/request", this::requestMultipleResources)
             .start(port);
     }
 
@@ -150,6 +156,30 @@ public class NodeController {
             ctx.status(500).json(new ApiResponse(
                 false,
                 "Failed to exit critical section: " + e.getMessage()
+            ));
+        }
+    }
+
+    private void requestMultipleResources(Context ctx) {
+        try {
+            List<String> resourceIds = objectMapper.readValue(
+                ctx.body(), 
+                new TypeReference<List<String>>() {}
+            );
+            
+            log.info("Received request for multiple resources: {}", resourceIds);
+            
+            messageService.requestMultipleResources(resourceIds);
+            
+            ctx.status(202).json(new ApiResponse(
+                true,
+                "Resource requests initiated for: " + String.join(", ", resourceIds)
+            ));
+        } catch (Exception e) {
+            log.error("Error requesting multiple resources: {}", e.getMessage());
+            ctx.status(500).json(new ApiResponse(
+                false,
+                "Failed to request resources: " + e.getMessage()
             ));
         }
     }

@@ -7,15 +7,16 @@ import com.rabbitmq.client.AMQP;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import java.util.Queue;
-import java.util.LinkedList;
+import java.util.PriorityQueue;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class ResourceMessageService {
     private final Channel channel;
     private final String resourceId;
     private final ObjectMapper objectMapper;
-    private final Queue<String> resourceQueue;
+    private final PriorityQueue<Message> resourceQueue;
     
     private static final String NODE_EXCHANGE = "nodes.topic";
     
@@ -23,7 +24,13 @@ public class ResourceMessageService {
         this.channel = channel;
         this.resourceId = resourceId;
         this.objectMapper = new ObjectMapper();
-        this.resourceQueue = new LinkedList<>();
+        this.resourceQueue = new PriorityQueue<>((m1, m2) -> {
+            int timestampCompare = Long.compare(m1.getTimestamp(), m2.getTimestamp());
+            if (timestampCompare == 0) {
+                return m1.getSenderId().compareTo(m2.getSenderId());
+            }
+            return timestampCompare;
+        });
     }
     
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
@@ -70,7 +77,7 @@ public class ResourceMessageService {
 
     private void handleRequestAccess(Message message) {
         try {
-            resourceQueue.add(message.getSenderId());
+            resourceQueue.add(message);
             
             Message response = new Message();
             response.setSenderId(resourceId);
@@ -82,9 +89,17 @@ public class ResourceMessageService {
                 new ArrayList<>(resourceQueue)
             ));
             
-            log.info("Sending queue update to node {}: Queue: {}", 
-                message.getSenderId(), 
-                resourceQueue);
+            log.info("Resource {} received request from node {} with timestamp {}", 
+                resourceId, 
+                message.getSenderId(),
+                message.getTimestamp());
+            
+            log.info("Current queue state for resource {}: {}", 
+                resourceId,
+                resourceQueue.stream()
+                    .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
+                    .collect(Collectors.joining(", "))
+            );
             
             sendNodeMessage(response);
         } catch (Exception e) {
@@ -94,7 +109,7 @@ public class ResourceMessageService {
 
     private void handleReleaseAccess(Message message) {
         try {
-            if (!resourceQueue.peek().equals(message.getSenderId())) {
+            if (!resourceQueue.peek().getSenderId().equals(message.getSenderId())) {
                 log.warn("Received RELEASE_ACCESS from node {} but it's not first in queue", 
                     message.getSenderId());
                 return;
@@ -110,8 +125,8 @@ public class ResourceMessageService {
                 new ArrayList<>(resourceQueue)
             ));
             
-            for (String nodeId : resourceQueue) {
-                queueUpdate.setTargetId(nodeId);
+            for (Message msg : resourceQueue) {
+                queueUpdate.setTargetId(msg.getSenderId());
                 sendNodeMessage(queueUpdate);
             }
             
