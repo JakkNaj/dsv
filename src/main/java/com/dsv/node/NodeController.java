@@ -2,12 +2,9 @@ package com.dsv.node;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import com.dsv.model.NodeStatus;
 import com.dsv.model.ApiResponse;
-import com.dsv.model.ENodeStatus;
 
 import io.javalin.json.JavalinJackson;
 import com.fasterxml.jackson.core.type.TypeReference;

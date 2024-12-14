@@ -194,7 +194,7 @@ public class NodeMessageService {
 
     // vstup do kritické sekce (používání zdroje)
     public boolean enterCriticalSection(String resourceId) {
-        if (nodeStatus != ENodeStatus.READY_TO_ENTER) {
+        if (nodeStatus != ENodeStatus.READY_TO_ENTER && nodeStatus != ENodeStatus.WAITING_IN_QUEUE_FOR_RESOURCE) {
             log.warn("Cannot enter critical section while in {} state", nodeStatus);
             return false;
         }
@@ -203,8 +203,9 @@ public class NodeMessageService {
             if (requestedResources.contains(resourceId)) {
                 log.info("Node {} cannot enter critical section for resource {}, not first in queue", nodeId, resourceId);
                 nodeStatus = ENodeStatus.WAITING_IN_QUEUE_FOR_RESOURCE;
+            } else {
+                log.info("Node {} cannot enter critical section for resource {}, request entry first", nodeId, resourceId);
             }
-            log.info("Node {} cannot enter critical section for resource {}, request entry first", nodeId, resourceId);
             return false;
         }
         
@@ -234,6 +235,8 @@ public class NodeMessageService {
         if (requestedResources.isEmpty()) {
             nodeStatus = ENodeStatus.IDLE;
             log.info("All resources released, changing state to IDLE");
+        } else {
+            nodeStatus = ENodeStatus.READY_TO_ENTER;
         }
         
         log.info("Node {} released resource {}", nodeId, resourceId);
