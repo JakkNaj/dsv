@@ -1,5 +1,5 @@
 rabbitmq:
-  host: "172.20.10.6"
+  host: "192.168.3.227"
   port: 5672
   username: "myuser"
   password: "mypassword"
