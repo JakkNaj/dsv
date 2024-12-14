@@ -2,9 +2,13 @@ package com.dsv.node;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import com.dsv.model.NodeStatus;
 import com.dsv.model.ApiResponse;
+import com.dsv.model.ENodeStatus;
+
 import io.javalin.json.JavalinJackson;
 
 @Slf4j
@@ -29,6 +33,9 @@ public class NodeController {
             /* .post("/resource/{resourceId}/release", this::releaseResource) */
             .post("/message/{targetNodeId}", this::sendTestMessage)
             .post("/slowness/{milliseconds}", this::setSlowness)
+            .post("/node/resource/:resourceId/preliminary", this::sendPreliminaryRequest)
+            .post("/node/resource/:resourceId/enter", this::enterCriticalSection)
+            .post("/node/resource/:resourceId/exit", this::exitCriticalSection)
             .start(port);
     }
 
@@ -36,8 +43,8 @@ public class NodeController {
         log.info("Status request received");
         NodeStatus status = new NodeStatus(
             nodeId,
-            "running",
-            System.currentTimeMillis()
+            messageService.getNodeStatus().toString(),
+            messageService.getResourceQueues()
         );
         ctx.json(status);
     }
@@ -81,5 +88,56 @@ public class NodeController {
         } catch (NumberFormatException e) {
             ctx.status(400).json(new ApiResponse(false, "Invalid milliseconds value"));
         }
+    }
+
+    private void sendPreliminaryRequest(Context ctx) {
+        String resourceId = ctx.pathParam("resourceId");
+        log.info("Preliminary resource request received for resource: {}", resourceId);
+        
+        try {
+            messageService.sendPreliminaryRequest(resourceId);
+            ctx.status(202).json(new ApiResponse(
+                true,
+                "Preliminary request sent for " + resourceId
+            ));
+        } catch (Exception e) {
+            log.error("Error sending preliminary request: {}", e.getMessage());
+            ctx.status(500).json(new ApiResponse(
+                false,
+                "Failed to send preliminary request: " + e.getMessage()
+            ));
+        }
+    }
+
+    private void enterCriticalSection(Context ctx) {
+        String resourceId = ctx.pathParam("resourceId");
+        log.info("Request to enter critical section for resource: {}", resourceId);
+        
+        try {
+            boolean entered = messageService.enterCriticalSection(resourceId);
+            if (entered) {
+                ctx.status(200).json(new ApiResponse(
+                    true,
+                    "Entered critical section for " + resourceId
+                ));
+            } else {
+                ctx.status(403).json(new ApiResponse(
+                    false,
+                    "Cannot enter critical section at this time"
+                ));
+            }
+        } catch (Exception e) {
+            log.error("Error entering critical section: {}", e.getMessage());
+            ctx.status(500).json(new ApiResponse(
+                false,
+                "Failed to enter critical section: " + e.getMessage()
+            ));
+        }
+    }
+
+    private void exitCriticalSection(Context ctx) {
+        String resourceId = ctx.pathParam("resourceId");
+        log.info("Request to exit critical section for resource: {}", resourceId);
+        //TODO: implementace opuštění kritické sekce
     }
 }

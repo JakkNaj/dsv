@@ -2,12 +2,19 @@ package com.dsv.node;
 
 import com.dsv.model.Message;
 import com.dsv.model.EMessageType;
+import com.dsv.model.ENodeStatus;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.AMQP;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import lombok.Getter;
 import lombok.Setter;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.LinkedList;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 @Slf4j
 public class NodeMessageService {
@@ -15,11 +22,15 @@ public class NodeMessageService {
     private final String nodeId;
     private final String exchangeName;
     private final ObjectMapper objectMapper;
-    private long lamportClock;
+    private final Map<String, Queue<String>> resourceQueues; //queue for each resource
 
     @Getter
     @Setter
     private long slowness = 0;
+
+    @Getter
+    @Setter
+    private ENodeStatus nodeStatus = ENodeStatus.IDLE;
     
     private static final String RESOURCE_EXCHANGE = "resources.topic";
     
@@ -28,7 +39,7 @@ public class NodeMessageService {
         this.nodeId = nodeId;
         this.exchangeName = exchangeName;
         this.objectMapper = new ObjectMapper();
-        this.lamportClock = 0;
+        this.resourceQueues = new ConcurrentHashMap<>();
     }
 
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
@@ -36,28 +47,17 @@ public class NodeMessageService {
             Message message = objectMapper.readValue(new String(body), Message.class);
             log.info("Node received message: type={}, from={}, timestamp={}", 
                 message.getType(), message.getSenderId(), message.getTimestamp());
-            
-            updateLamportClock(message.getTimestamp());
-            
+                        
             switch (message.getType()) {
                 case REQUEST_ACCESS:
                     log.info("Processing REQUEST_ACCESS from node {}", message.getSenderId());
                     requestAccess(message.getResourceId());
                     break;
-                case GRANT_ACCESS:
-                    log.info("Processing GRANT_ACCESS from resource {}", message.getSenderId());
-                    handleGrantAccess(message);
-                    break;
-                case DENY_ACCESS:
-                    log.info("Processing DENY_ACCESS from resource {}", message.getSenderId());
-                    //TODO: reakce na odepření přístupu ke ZDROJI
-                    break;
-                case VALUE_RESPONSE:
-                    log.info("Processing VALUE_RESPONSE from resource {}", message.getSenderId());
-                    handleValueResponse(message);
-                    break;
                 case CONNECTION_TEST:
                     log.info("Processing CONNECTION_TEST from node {}", message.getSenderId());
+                    break;
+                case QUEUE_UPDATE:
+                    handleQueueUpdate(message);
                     break;
                 default:
                     log.warn("Node received unhandled message type: {}", message.getType());
@@ -107,54 +107,10 @@ public class NodeMessageService {
         Message request = new Message();
         request.setSenderId(nodeId);
         request.setType(EMessageType.REQUEST_ACCESS);
-        request.setTimestamp(++lamportClock);
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
         
         sendResourceMessage(request);
-    }
-
-    // reakce na získání přístupu ke ZDROJI
-    private void handleGrantAccess(Message message) {
-        log.info("Node received GRANT_ACCESS from resource {}", message.getSenderId());
-        /* try {
-            Thread.sleep(2000); // Wait before reading critical value
-            
-            Message readRequest = new Message();
-            readRequest.setSenderId(nodeId);
-            readRequest.setTargetId(message.getSenderId());
-            readRequest.setType(EMessageType.READ_CRITIC_VALUE);
-            readRequest.setTimestamp(++lamportClock);
-            readRequest.setResourceId(message.getResourceId());
-            
-            sendResourceMessage(readRequest);
-            
-        } catch (Exception e) {
-            log.error("Error handling GRANT_ACCESS: {}", e.getMessage());
-        } */
-    }
-
-    // reakce na získání hodnoty kritické sekce ze ZDROJE
-    private void handleValueResponse(Message message) {
-        try {
-            int value = Integer.parseInt(message.getContent());
-            log.info("Successfully accessed critical section for resource: {}. Value: {}", 
-                     message.getResourceId(), value);
-            
-            Thread.sleep(5000); // Wait before releasing
-            
-            Message release = new Message();
-            release.setSenderId(nodeId);
-            release.setTargetId(message.getSenderId());
-            release.setType(EMessageType.RELEASE_ACCESS);
-            release.setTimestamp(++lamportClock);
-            release.setResourceId(message.getResourceId());
-            
-            sendResourceMessage(release);
-            
-        } catch (Exception e) {
-            log.error("Error handling VALUE_RESPONSE: {}", e.getMessage());
-        }
     }
 
     // testovací zpráva pro testování komunikace mezi nody
@@ -164,7 +120,6 @@ public class NodeMessageService {
         msg.setSenderId(nodeId);
         msg.setTargetId(targetNodeId);
         msg.setType(EMessageType.CONNECTION_TEST);
-        msg.setTimestamp(++lamportClock);
         msg.setContent(content);
         
         sendNodeMessage(msg);
@@ -180,7 +135,50 @@ public class NodeMessageService {
         }
     }
 
-    private void updateLamportClock(long messageTimestamp) {
-        lamportClock = Math.max(lamportClock, messageTimestamp) + 1;
+    // Nová metoda pro předběžnou žádost o zdroj
+    public void sendPreliminaryRequest(String resourceId) {
+        Message request = new Message();
+        request.setSenderId(nodeId);
+        request.setTargetId(resourceId);
+        request.setType(EMessageType.PRELIMINARY_REQUEST);
+        request.setResourceId(resourceId);
+        
+        sendResourceMessage(request);
+    }
+
+    // Nová metoda pro vstup do kritické sekce
+    public boolean enterCriticalSection(String resourceId) {
+        //TODO: vstup do kritické sekce
+        return true;
+    }
+
+    private void handleQueueUpdate(Message message) {
+        try {
+            // Deserializace fronty ze zprávy
+            List<String> queueData = objectMapper.readValue(
+                message.getContent(), 
+                new TypeReference<List<String>>() {}
+            );
+            
+            // Vytvoření nové fronty a naplnění daty
+            Queue<String> queue = new LinkedList<>();
+            queue.addAll(queueData);
+            
+            // Uložení fronty do mapy pod příslušným resourceId
+            resourceQueues.put(message.getResourceId(), queue);
+            
+            log.info("Updated queue for resource {}: {}", 
+                message.getResourceId(), 
+                String.join(", ", queueData)
+            );
+        } catch (Exception e) {
+            log.error("Error handling queue update: {}", e.getMessage(), e);
+        }
+    }
+
+// ----------------------- Gettery a settery ---------------------------------------------
+
+    public String getResourceQueues() {
+        return resourceQueues.toString();
     }
 }

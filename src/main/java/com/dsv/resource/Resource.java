@@ -10,7 +10,6 @@ public class Resource {
     private final Channel channel;
     private final String exchangeName;
     private ResourceMessageService messageService;
-    private ResourceManager resourceManager;
     
     public Resource(String resourceId, String ownerId, Channel channel, String exchangeName) {
         this.resourceId = resourceId;
@@ -21,8 +20,7 @@ public class Resource {
     
     public void start() {
         setupQueue();
-        this.resourceManager = new ResourceManager(resourceId, ownerId);
-        this.messageService = new ResourceMessageService(channel, resourceId, exchangeName, resourceManager);
+        this.messageService = new ResourceMessageService(channel, resourceId);
         log.info("Resource {} initialized with resource manager", resourceId);
     }
     

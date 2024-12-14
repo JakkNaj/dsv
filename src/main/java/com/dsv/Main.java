@@ -96,6 +96,7 @@ public class Main {
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
                     if (addr.getHostAddress().contains(":")) continue;
+                    log.info("Found IP address: {}", addr.getHostAddress());
                     return addr.getHostAddress();
                 }
             }

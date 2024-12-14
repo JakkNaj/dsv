@@ -7,7 +7,7 @@ public enum EMessageType {
     RELEASE_ACCESS,     // Uvolnění zdroje
     ACKNOWLEDGE,         // Potvrzení přijetí
     CONNECTION_TEST,      // Testovací zpráva pro testování připojení
-    READ_CRITIC_VALUE,    // Čtení kritické hodnoty
-    WRITE_CRITIC_VALUE,    // Zápis kritické hodnoty
-    VALUE_RESPONSE        // Odpověď na čtení kritické hodnoty
+    VALUE_RESPONSE,        // Odpověď na čtení kritické hodnoty
+    PRELIMINARY_REQUEST,  // Předběžná žádost o zdroj
+    QUEUE_UPDATE,        // Aktualizace fronty od zdroje
 } 

@@ -6,5 +6,5 @@ import lombok.Data;
 public class NodeStatus {
     private final String nodeId;
     private final String status;
-    private final long timestamp;
+    private final String resourceQueues;
 }
