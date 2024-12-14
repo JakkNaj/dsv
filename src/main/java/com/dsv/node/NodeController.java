@@ -33,9 +33,9 @@ public class NodeController {
             /* .post("/resource/{resourceId}/release", this::releaseResource) */
             .post("/message/{targetNodeId}", this::sendTestMessage)
             .post("/slowness/{milliseconds}", this::setSlowness)
-            .post("/node/resource/:resourceId/preliminary", this::sendPreliminaryRequest)
-            .post("/node/resource/:resourceId/enter", this::enterCriticalSection)
-            .post("/node/resource/:resourceId/exit", this::exitCriticalSection)
+            .post("/resource/{resourceId}/preliminary", this::sendPreliminaryRequest)
+            .post("/resource/{resourceId}/enter", this::enterCriticalSection)
+            .post("/resource/{resourceId}/exit", this::exitCriticalSection)
             .start(port);
     }
 
