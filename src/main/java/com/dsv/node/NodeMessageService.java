@@ -186,6 +186,8 @@ public class NodeMessageService {
         releaseMessage.setResourceId(resourceId);
         
         sendResourceMessage(releaseMessage);
+        Queue<String> queue = resourceQueues.get(resourceId);
+        queue.poll();
         nodeStatus = ENodeStatus.IDLE;
         log.info("Node {} released resource {}", nodeId, resourceId);
     }
