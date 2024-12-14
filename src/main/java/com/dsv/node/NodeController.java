@@ -34,11 +34,9 @@ public class NodeController {
                 config.jsonMapper(new JavalinJackson());
             })
             .get("/status", this::getStatus)
-            .post("/resource/{resourceId}/request", this::requestResource)
-            /* .post("/resource/{resourceId}/release", this::releaseResource) */
             .post("/message/{targetNodeId}", this::sendTestMessage)
             .post("/slowness/{milliseconds}", this::setSlowness)
-            .post("/resource/{resourceId}/preliminary", this::sendPreliminaryRequest)
+            .post("/resource/{resourceId}/request", this::requestResource)
             .post("/resource/{resourceId}/enter", this::enterCriticalSection)
             .post("/resource/{resourceId}/exit", this::exitCriticalSection)
             .post("/resources/request", this::requestMultipleResources)
@@ -93,25 +91,6 @@ public class NodeController {
             ctx.json(new ApiResponse(true, "Node slowness set to " + milliseconds + " ms"));
         } catch (NumberFormatException e) {
             ctx.status(400).json(new ApiResponse(false, "Invalid milliseconds value"));
-        }
-    }
-
-    private void sendPreliminaryRequest(Context ctx) {
-        String resourceId = ctx.pathParam("resourceId");
-        log.info("Preliminary resource request received for resource: {}", resourceId);
-        
-        try {
-            messageService.sendPreliminaryRequest(resourceId);
-            ctx.status(202).json(new ApiResponse(
-                true,
-                "Preliminary request sent for " + resourceId
-            ));
-        } catch (Exception e) {
-            log.error("Error sending preliminary request: {}", e.getMessage());
-            ctx.status(500).json(new ApiResponse(
-                false,
-                "Failed to send preliminary request: " + e.getMessage()
-            ));
         }
     }
 

@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.PriorityQueue;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.HashSet;
 
 @Slf4j
 public class NodeMessageService {
@@ -23,6 +25,8 @@ public class NodeMessageService {
     private final String exchangeName;
     private final ObjectMapper objectMapper;
     private final Map<String, PriorityQueue<Message>> resourceQueues;
+    private Set<String> requestedResources;
+    private Set<String> receivedQueues;
 
     @Getter
     @Setter
@@ -40,6 +44,8 @@ public class NodeMessageService {
         this.exchangeName = exchangeName;
         this.objectMapper = new ObjectMapper();
         this.resourceQueues = new ConcurrentHashMap<>();
+        this.requestedResources = new HashSet<>();
+        this.receivedQueues = new HashSet<>();
     }
 
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
@@ -98,7 +104,6 @@ public class NodeMessageService {
             log.error("Error sending message to resource: {}", e.getMessage(), e);
         }
     }
-
 // ----------------------- Metody pro zpracování zpráv ---------------------------------------
     
     // požádání o přidělení ZDROJE
@@ -109,6 +114,7 @@ public class NodeMessageService {
         request.setType(EMessageType.REQUEST_ACCESS);
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
+        request.setTimestamp(System.currentTimeMillis());
         
         sendResourceMessage(request);
     }
@@ -121,7 +127,7 @@ public class NodeMessageService {
         msg.setTargetId(targetNodeId);
         msg.setType(EMessageType.CONNECTION_TEST);
         msg.setContent(content);
-        
+        msg.setTimestamp(System.currentTimeMillis());
         sendNodeMessage(msg);
     }
 
@@ -133,17 +139,6 @@ public class NodeMessageService {
                 Thread.currentThread().interrupt();
             }
         }
-    }
-
-    // Nová metoda pro předběžnou žádost o zdroj
-    public void sendPreliminaryRequest(String resourceId) {
-        Message request = new Message();
-        request.setSenderId(nodeId);
-        request.setTargetId(resourceId);
-        request.setType(EMessageType.PRELIMINARY_REQUEST);
-        request.setResourceId(resourceId);
-        
-        sendResourceMessage(request);
     }
 
     // Pomocná metoda pro kontrolu, zda můžeme vstoupit do kritické sekce
@@ -160,10 +155,15 @@ public class NodeMessageService {
 
     // Metoda pro vstup do kritické sekce
     public boolean enterCriticalSection(String resourceId) {
+        if (nodeStatus != ENodeStatus.READY_TO_ENTER) {
+            log.warn("Cannot enter critical section while in {} state", nodeStatus);
+            return false;
+        }
+
         if (!canEnterCriticalSection(resourceId)) {
             log.info("Node {} cannot enter critical section for resource {}, not first in queue", 
                 nodeId, resourceId);
-            nodeStatus = ENodeStatus.WAITING;
+            nodeStatus = ENodeStatus.WAITING_IN_QUEUE_FOR_RESOURCE;
             return false;
         }
         
@@ -188,7 +188,13 @@ public class NodeMessageService {
         sendResourceMessage(releaseMessage);
         PriorityQueue<Message> queue = resourceQueues.get(resourceId);
         queue.poll();
-        nodeStatus = ENodeStatus.IDLE;
+        
+        requestedResources.remove(resourceId);
+        if (requestedResources.isEmpty()) {
+            nodeStatus = ENodeStatus.IDLE;
+            log.info("All resources released, changing state to IDLE");
+        }
+        
         log.info("Node {} released resource {}", nodeId, resourceId);
     }
 
@@ -210,12 +216,20 @@ public class NodeMessageService {
             
             resourceQueues.put(message.getResourceId(), queue);
             
+            receivedQueues.add(message.getResourceId());
+            
             log.info("Updated queue for resource {}: {}", 
                 message.getResourceId(), 
                 queue.stream()
                     .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
                     .collect(Collectors.joining(", "))
             );
+            
+            if (nodeStatus == ENodeStatus.WAITING_FOR_RESOURCES_QUEUES && 
+                receivedQueues.containsAll(requestedResources)) {
+                nodeStatus = ENodeStatus.READY_TO_ENTER;
+                log.info("Received all requested queues, changing state to READY_TO_ENTER");
+            }
         } catch (Exception e) {
             log.error("Error handling queue update: {}", e.getMessage(), e);
         }
@@ -234,12 +248,24 @@ public class NodeMessageService {
 
     // Přidání metody pro hromadné žádosti
     public void requestMultipleResources(List<String> resourceIds) {
+        if (nodeStatus != ENodeStatus.IDLE) {
+            throw new IllegalStateException("Cannot request resources while in " + nodeStatus + " state");
+        }
+
         simulateSlowness();
         
         // Vytvoření společného timestampu pro všechny zprávy
         long commonTimestamp = System.currentTimeMillis();
         
-        // Vytvoření všech zpráv se stejným timestampem
+        // Uložení požadovaných resources
+        requestedResources.clear();
+        receivedQueues.clear();
+        requestedResources.addAll(resourceIds);
+        
+        // Změna stavu
+        nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
+        
+        // Vytvoření a odeslání zpráv
         List<Message> requests = resourceIds.stream()
             .map(resourceId -> {
                 Message request = new Message();
@@ -252,11 +278,9 @@ public class NodeMessageService {
             })
             .collect(Collectors.toList());
         
-        // Odeslání všech zpráv
         requests.forEach(this::sendResourceMessage);
         
         log.info("Sent batch resource requests with timestamp {} for resources: {}", 
-            commonTimestamp, 
-            resourceIds);
+            commonTimestamp, resourceIds);
     }
 }
