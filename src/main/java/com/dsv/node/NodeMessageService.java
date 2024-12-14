@@ -106,8 +106,12 @@ public class NodeMessageService {
     }
 // ----------------------- Metody pro zpracování zpráv ---------------------------------------
     
-    // požádání o přidělení ZDROJE
+    // požádání o přidělení jednoho ZDROJE
     public void requestAccess(String resourceId) {
+        if (nodeStatus != ENodeStatus.IDLE) {
+            log.warn("Cannot request access while in {} state", nodeStatus);
+            return;
+        }
         simulateSlowness();
         Message request = new Message();
         request.setSenderId(nodeId);
@@ -115,8 +119,44 @@ public class NodeMessageService {
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
         request.setTimestamp(System.currentTimeMillis());
-        
+
+        nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         sendResourceMessage(request);
+    }
+
+     // požádání o více ZDROJŮ NAJEDNOU
+     public void requestMultipleResources(List<String> resourceIds) {
+        if (nodeStatus != ENodeStatus.IDLE) {
+            throw new IllegalStateException("Cannot request resources while in " + nodeStatus + " state");
+        }
+
+        simulateSlowness();
+        
+        // Vytvoření společného timestampu pro všechny zprávy
+        long commonTimestamp = System.currentTimeMillis();
+        
+        requestedResources.clear();
+        receivedQueues.clear();
+        requestedResources.addAll(resourceIds);
+        
+        nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
+        
+        List<Message> requests = resourceIds.stream()
+            .map(resourceId -> {
+                Message request = new Message();
+                request.setSenderId(nodeId);
+                request.setType(EMessageType.REQUEST_ACCESS);
+                request.setResourceId(resourceId);
+                request.setTargetId(resourceId);
+                request.setTimestamp(commonTimestamp);
+                return request;
+            })
+            .collect(Collectors.toList());
+        
+        requests.forEach(this::sendResourceMessage);
+        
+        log.info("Sent batch resource requests with timestamp {} for resources: {}", 
+            commonTimestamp, resourceIds);
     }
 
     // testovací zpráva pro testování komunikace mezi nody
@@ -141,7 +181,7 @@ public class NodeMessageService {
         }
     }
 
-    // Pomocná metoda pro kontrolu, zda můžeme vstoupit do kritické sekce
+    // Pomocná metoda pro kontrolu, zda může node vstoupit do kritické sekce
     private boolean canEnterCriticalSection(String resourceId) {
         PriorityQueue<Message> queue = resourceQueues.get(resourceId);
         if (queue == null || queue.isEmpty()) {
@@ -149,11 +189,10 @@ public class NodeMessageService {
             return false;
         }
         
-        // Kontrola, zda jsme první ve frontě
         return queue.peek().getSenderId().equals(nodeId);
     }
 
-    // Metoda pro vstup do kritické sekce
+    // vstup do kritické sekce (používání zdroje)
     public boolean enterCriticalSection(String resourceId) {
         if (nodeStatus != ENodeStatus.READY_TO_ENTER) {
             log.warn("Cannot enter critical section while in {} state", nodeStatus);
@@ -161,9 +200,11 @@ public class NodeMessageService {
         }
 
         if (!canEnterCriticalSection(resourceId)) {
-            log.info("Node {} cannot enter critical section for resource {}, not first in queue", 
-                nodeId, resourceId);
-            nodeStatus = ENodeStatus.WAITING_IN_QUEUE_FOR_RESOURCE;
+            if (requestedResources.contains(resourceId)) {
+                log.info("Node {} cannot enter critical section for resource {}, not first in queue", nodeId, resourceId);
+                nodeStatus = ENodeStatus.WAITING_IN_QUEUE_FOR_RESOURCE;
+            }
+            log.info("Node {} cannot enter critical section for resource {}, request entry first", nodeId, resourceId);
             return false;
         }
         
@@ -172,7 +213,7 @@ public class NodeMessageService {
         return true;
     }
 
-    // Metoda pro opuštění kritické sekce
+    // opuštění kritické sekce (uvolnění zdroje)
     public void exitCriticalSection(String resourceId) {
         if (nodeStatus != ENodeStatus.WORKING) {
             log.warn("Attempting to exit critical section while not in WORKING state");
@@ -198,6 +239,7 @@ public class NodeMessageService {
         log.info("Node {} released resource {}", nodeId, resourceId);
     }
 
+    // zpracování zprávy o aktualizaci fronty (grafu závislosti)
     private void handleQueueUpdate(Message message) {
         try {
             List<Message> queueData = objectMapper.readValue(
@@ -244,43 +286,5 @@ public class NodeMessageService {
                     .map(msg -> String.format("%s(ts:%d)", msg.getSenderId(), msg.getTimestamp()))
                     .collect(Collectors.joining(", ")))
             .collect(Collectors.joining("\n"));
-    }
-
-    // Přidání metody pro hromadné žádosti
-    public void requestMultipleResources(List<String> resourceIds) {
-        if (nodeStatus != ENodeStatus.IDLE) {
-            throw new IllegalStateException("Cannot request resources while in " + nodeStatus + " state");
-        }
-
-        simulateSlowness();
-        
-        // Vytvoření společného timestampu pro všechny zprávy
-        long commonTimestamp = System.currentTimeMillis();
-        
-        // Uložení požadovaných resources
-        requestedResources.clear();
-        receivedQueues.clear();
-        requestedResources.addAll(resourceIds);
-        
-        // Změna stavu
-        nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
-        
-        // Vytvoření a odeslání zpráv
-        List<Message> requests = resourceIds.stream()
-            .map(resourceId -> {
-                Message request = new Message();
-                request.setSenderId(nodeId);
-                request.setType(EMessageType.REQUEST_ACCESS);
-                request.setResourceId(resourceId);
-                request.setTargetId(resourceId);
-                request.setTimestamp(commonTimestamp);
-                return request;
-            })
-            .collect(Collectors.toList());
-        
-        requests.forEach(this::sendResourceMessage);
-        
-        log.info("Sent batch resource requests with timestamp {} for resources: {}", 
-            commonTimestamp, resourceIds);
     }
 }
