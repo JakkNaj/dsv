@@ -27,6 +27,7 @@ public class NodeMessageService {
     private final Map<String, PriorityQueue<Message>> resourceQueues;
     private Set<String> requestedResources;
     private Set<String> receivedQueues;
+    private long lamportClock = 0;
 
     @Getter
     @Setter
@@ -48,9 +49,19 @@ public class NodeMessageService {
         this.receivedQueues = new HashSet<>();
     }
 
+    private void updateLamportClock(long messageTimestamp) {
+        lamportClock = Math.max(lamportClock, messageTimestamp) + 1;
+    }
+
+    private long getNextLamportTimestamp() {
+        return ++lamportClock;
+    }
+
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
         try {
             Message message = objectMapper.readValue(new String(body), Message.class);
+            updateLamportClock(message.getTimestamp());
+            
             log.info("Node received message: type={}, from={}, timestamp={}", 
                 message.getType(), message.getSenderId(), message.getTimestamp());
                         
@@ -118,7 +129,7 @@ public class NodeMessageService {
         request.setType(EMessageType.REQUEST_ACCESS);
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
-        request.setTimestamp(System.currentTimeMillis());
+        request.setTimestamp(getNextLamportTimestamp());
 
         nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         sendResourceMessage(request);
@@ -132,8 +143,7 @@ public class NodeMessageService {
 
         simulateSlowness();
         
-        // Vytvoření společného timestampu pro všechny zprávy
-        long commonTimestamp = System.currentTimeMillis();
+        long commonTimestamp = getNextLamportTimestamp();
         
         requestedResources.clear();
         receivedQueues.clear();
@@ -167,7 +177,7 @@ public class NodeMessageService {
         msg.setTargetId(targetNodeId);
         msg.setType(EMessageType.CONNECTION_TEST);
         msg.setContent(content);
-        msg.setTimestamp(System.currentTimeMillis());
+        msg.setTimestamp(getNextLamportTimestamp());
         sendNodeMessage(msg);
     }
 
