@@ -16,6 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.File;
 import com.dsv.node.Node;
 import com.dsv.resource.Resource;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.util.StatusPrinter;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class Main {
@@ -29,21 +33,19 @@ public class Main {
     private static Resource resource;
     
     public static void main(String[] args) {
+
         new File("logs").mkdirs();
         
         loadConfig();
         setupRabbitMQConnection();
         
-        // Initialize Node and Resource components
         String nodeId = nodeConfig.getId();
         node = new Node(nodeId, channel, NODE_EXCHANGE, config);
         
-        // Only create resource if this node should have one
         if (nodeConfig.isResource()) {
             resource = new Resource(nodeId + "-resource", nodeId, channel, RESOURCE_EXCHANGE, config);
         }
         
-        // Start components
         node.start(nodeConfig.getPort());
         if (resource != null) {
             resource.start();
