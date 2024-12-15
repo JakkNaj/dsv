@@ -27,6 +27,9 @@ cluster_formation.classic_config.nodes.1 = rabbit@rabbit1
 cluster_formation.classic_config.nodes.2 = rabbit@rabbit2
 EOF
 
+# Nejdřív zastavíme aplikaci
+sudo rabbitmqctl stop_app
+
 # Zde je potřeba ručně vložit Erlang cookie z prvního serveru
 echo "Vložte Erlang cookie z prvního serveru:"
 read ERLANG_COOKIE
@@ -34,11 +37,10 @@ sudo sh -c "echo $ERLANG_COOKIE > /var/lib/rabbitmq/.erlang.cookie"
 sudo chown rabbitmq:rabbitmq /var/lib/rabbitmq/.erlang.cookie
 sudo chmod 400 /var/lib/rabbitmq/.erlang.cookie
 
-# Restart služby
-sudo systemctl restart rabbitmq-server
-
-# Připojení do clusteru
-sudo rabbitmqctl stop_app
+# Reset a připojení do clusteru
 sudo rabbitmqctl reset
 sudo rabbitmqctl join_cluster rabbit@rabbit1
 sudo rabbitmqctl start_app
+
+echo "Kontrola stavu clusteru:"
+sudo rabbitmqctl cluster_status
