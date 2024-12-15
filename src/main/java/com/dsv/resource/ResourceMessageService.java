@@ -7,10 +7,11 @@ import com.rabbitmq.client.AMQP;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import java.util.Queue;
-import java.util.PriorityQueue;
 import java.util.ArrayList;
-import java.util.stream.Collectors;
 import java.util.LinkedList;
+import java.util.Set;
+import com.dsv.health.HealthChecker;
+import com.dsv.config.AppConfig;
 
 @Slf4j
 public class ResourceMessageService {
@@ -18,14 +19,18 @@ public class ResourceMessageService {
     private final String resourceId;
     private final ObjectMapper objectMapper;
     private final Queue<String> resourceQueue;
+    private Thread healthCheckerThread;
+    private HealthChecker healthChecker;
+    private final AppConfig appConfig;
     
     private static final String NODE_EXCHANGE = "nodes.topic";
     
-    public ResourceMessageService(Channel channel, String resourceId) {
+    public ResourceMessageService(Channel channel, String resourceId, AppConfig appConfig) {
         this.channel = channel;
         this.resourceId = resourceId;
         this.objectMapper = new ObjectMapper();
         this.resourceQueue = new LinkedList<>();
+        this.appConfig = appConfig;
     }
     
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
@@ -72,7 +77,13 @@ public class ResourceMessageService {
 
     private void handleRequestAccess(Message message) {
         try {
-            resourceQueue.add(message.getSenderId());
+            String newNodeId = message.getSenderId();
+            boolean wasEmpty = resourceQueue.isEmpty();
+            resourceQueue.add(newNodeId);
+            
+            if (wasEmpty) {
+                startHealthChecker(newNodeId);
+            }
             
             Message response = new Message();
             response.setSenderId(resourceId);
@@ -103,6 +114,12 @@ public class ResourceMessageService {
             }
             
             resourceQueue.poll();
+            stopHealthChecker();
+            
+            String nextNodeId = resourceQueue.peek();
+            if (nextNodeId != null) {
+                startHealthChecker(nextNodeId);
+            }
             
             Message queueUpdate = new Message();
             queueUpdate.setSenderId(resourceId);
@@ -127,6 +144,79 @@ public class ResourceMessageService {
 
     private void handleTestAccess(Message message) {
         log.info("Resource received CONNECTION_TEST from node {}", message.getSenderId());
+    }
+
+    private void handleNodeFailure(String failedNodeId) {
+        log.warn("Node {} failed health check, releasing its resources", failedNodeId);
+        
+        if (resourceQueue.peek().equals(failedNodeId)) {
+            stopHealthChecker();
+            resourceQueue.poll();
+            
+            String nextNodeId = resourceQueue.peek();
+            if (nextNodeId != null) {
+                startHealthChecker(nextNodeId);
+            }
+            
+            Message queueUpdate = new Message();
+            queueUpdate.setSenderId(resourceId);
+            queueUpdate.setType(EMessageType.QUEUE_UPDATE);
+            queueUpdate.setResourceId(resourceId);
+            
+            try {
+                queueUpdate.setContent(objectMapper.writeValueAsString(
+                    new ArrayList<>(resourceQueue)
+                ));
+                
+                for (String nodeId : resourceQueue) {
+                    queueUpdate.setTargetId(nodeId);
+                    sendNodeMessage(queueUpdate);
+                }
+            } catch (Exception e) {
+                log.error("Error sending queue update after node failure: {}", 
+                    e.getMessage());
+            }
+        }
+    }
+
+    private void startHealthChecker(String nodeId) {
+        stopHealthChecker();
+        
+        log.info("Starting health checker for node {}", nodeId);
+        
+        Runnable onNodeFailure = () -> {
+            if (nodeId.equals(resourceQueue.peek())) {
+                handleNodeFailure(nodeId);
+            }
+        };
+
+        healthChecker = new HealthChecker(
+            Set.of(nodeId),
+            onNodeFailure,
+            appConfig
+        );
+
+        healthCheckerThread = new Thread(healthChecker);
+        healthCheckerThread.setDaemon(true);
+        healthCheckerThread.start();
+        
+        log.info("Health checker started for node {}", nodeId);
+    }
+
+    private void stopHealthChecker() {
+        if (healthChecker != null) {
+            log.info("Stopping health checker");
+            healthChecker.stop();
+            healthChecker = null;
+        }
+        if (healthCheckerThread != null) {
+            healthCheckerThread.interrupt();
+            healthCheckerThread = null;
+        }
+    }
+
+    public void stop() {
+        stopHealthChecker();
     }
 
 } 

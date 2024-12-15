@@ -9,40 +9,50 @@ nodes:
     id: "node1"
     port: 7070
     resource: true
+    ip: "192.168.3.100"
   "192.168.3.101":
     id: "node2"
     port: 7071
     resource: true
+    ip: "192.168.3.101"
   "192.168.3.102":
     id: "node3"
     port: 7072 
     resource: true
+    ip: "192.168.3.102"
   "192.168.3.103":
     id: "node4"
     port: 7073
     resource: true
+    ip: "192.168.3.103"
   "192.168.3.104":
     id: "node5"
     port: 7074 
     resource: true
+    ip: "192.168.3.104"
   "192.168.3.176":
     id: "macnode6"
     port: 7075
     resource: true
+    ip: "192.168.3.176"
   "192.168.3.61":
     id: "node61"
     port: 7061
     resource: true
+    ip: "192.168.3.61"
   "192.168.3.62":
     id: "node62"
     port: 7062
     resource: true
+    ip: "192.168.3.62"
 
   "172.20.10.7":
     id: "node6"
     port: 7076 
     resource: true
+    ip: "172.20.10.7"
   "172.20.10.5":
     id: "macnode7"
     port: 7077 
     resource: true
+    ip: "172.20.10.5"

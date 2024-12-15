@@ -2,6 +2,7 @@ package com.dsv.resource;
 
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
+import com.dsv.config.AppConfig;
 
 @Slf4j
 public class Resource {
@@ -10,17 +11,19 @@ public class Resource {
     private final Channel channel;
     private final String exchangeName;
     private ResourceMessageService messageService;
+    private final AppConfig appConfig;
     
-    public Resource(String resourceId, String ownerId, Channel channel, String exchangeName) {
+    public Resource(String resourceId, String ownerId, Channel channel, String exchangeName, AppConfig appConfig) {
         this.resourceId = resourceId;
         this.ownerId = ownerId;
         this.channel = channel;
         this.exchangeName = exchangeName;
+        this.appConfig = appConfig;
     }
     
     public void start() {
         setupQueue();
-        this.messageService = new ResourceMessageService(channel, resourceId);
+        this.messageService = new ResourceMessageService(channel, resourceId, appConfig);
         log.info("Resource {} initialized with resource manager", resourceId);
     }
     

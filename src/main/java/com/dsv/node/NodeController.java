@@ -37,6 +37,7 @@ public class NodeController {
             .post("/resource/{resourceId}/enter", this::enterCriticalSection)
             .post("/resource/{resourceId}/exit", this::exitCriticalSection)
             .post("/resources/request", this::requestMultipleResources)
+            .get("/health", this::healthCheck)
             .start(port);
     }
 
@@ -158,5 +159,9 @@ public class NodeController {
                 "Failed to request resources: " + e.getMessage()
             ));
         }
+    }
+
+    private void healthCheck(Context ctx) {
+        ctx.status(200).json(new ApiResponse(true, "Node " + nodeId + " is healthy"));
     }
 }

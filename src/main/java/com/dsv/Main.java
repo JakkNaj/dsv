@@ -40,7 +40,7 @@ public class Main {
         
         // Only create resource if this node should have one
         if (nodeConfig.isResource()) {
-            resource = new Resource(nodeId + "-resource", nodeId, channel, RESOURCE_EXCHANGE);
+            resource = new Resource(nodeId + "-resource", nodeId, channel, RESOURCE_EXCHANGE, config);
         }
         
         // Start components

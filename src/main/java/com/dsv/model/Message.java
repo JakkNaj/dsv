@@ -9,4 +9,4 @@ public class Message {
     private EMessageType type;
     private String resourceId;
     private String content;
-} 
+}
