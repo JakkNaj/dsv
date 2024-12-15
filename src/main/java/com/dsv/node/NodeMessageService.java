@@ -301,7 +301,8 @@ public class NodeMessageService {
         };
 
         healthChecker = new HealthChecker(
-            nodeIds, //stačí sledovat nodeId, protože s Node umírá i Resource
+            nodeId,
+            nodeIds,
             onNodeFailure,
             appConfig
         );

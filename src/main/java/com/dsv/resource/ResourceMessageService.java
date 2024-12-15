@@ -195,6 +195,7 @@ public class ResourceMessageService {
         };
 
         healthChecker = new HealthChecker(
+            resourceId.split("-")[0],   // nodeId
             Set.of(nodeId),
             onNodeFailure,
             appConfig
@@ -229,7 +230,7 @@ public class ResourceMessageService {
             if (resourceQueue.remove(nodeToRemove)) {
                 log.info("Removed node {} from queue", nodeToRemove);
                 
-                // Notify all remaining nodes about queue update
+                // nahlášení ostatním node v queue, že se queue změnila
                 Message queueUpdate = new Message();
                 queueUpdate.setSenderId(resourceId);
                 queueUpdate.setType(EMessageType.QUEUE_UPDATE);

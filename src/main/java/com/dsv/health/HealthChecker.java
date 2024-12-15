@@ -9,6 +9,7 @@ import java.net.http.HttpResponse;
 import java.net.URI;
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class HealthChecker implements Runnable {
@@ -17,6 +18,7 @@ public class HealthChecker implements Runnable {
     private final HttpClient httpClient;
     private final Runnable onNodeFailure;
     private volatile boolean running = true;
+    private final String ownId;
 
     private static final int CHECK_INTERVAL = 5000;
     private static final int TIMEOUT = 3000;
@@ -31,8 +33,11 @@ public class HealthChecker implements Runnable {
         }
     }
 
-    public HealthChecker(Set<String> nodesToCheck, Runnable onNodeFailure, AppConfig config) {
-        this.nodesToCheck = nodesToCheck;
+    public HealthChecker(String ownId, Set<String> nodesToCheck, Runnable onNodeFailure, AppConfig config) {
+        this.ownId = ownId;
+        this.nodesToCheck = nodesToCheck.stream()
+            .filter(id -> !id.equals(ownId))
+            .collect(Collectors.toSet());
         this.onNodeFailure = onNodeFailure;
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(TIMEOUT))
@@ -40,7 +45,7 @@ public class HealthChecker implements Runnable {
 
         for (Map.Entry<String, NodeConfig> entry : config.getNodes().entrySet()) {
             NodeConfig nodeConfig = entry.getValue();
-            if (nodesToCheck.contains(nodeConfig.getId())) {
+            if (this.nodesToCheck.contains(nodeConfig.getId())) {
                 nodeInfoMap.put(
                     nodeConfig.getId(), 
                     new NodeInfo(nodeConfig.getIp(), nodeConfig.getPort())
@@ -48,8 +53,12 @@ public class HealthChecker implements Runnable {
             }
         }
 
-        log.info("HealthChecker initialized for nodes: {}", 
-            String.join(", ", nodesToCheck));
+        if (this.nodesToCheck.isEmpty()) {
+            log.info("No external nodes to check for {}", ownId);
+        } else {
+            log.info("HealthChecker initialized for nodes: {}", 
+                String.join(", ", this.nodesToCheck));
+        }
     }
 
     @Override
