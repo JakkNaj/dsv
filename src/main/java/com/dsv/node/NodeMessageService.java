@@ -126,8 +126,13 @@ public class NodeMessageService {
         request.setResourceId(resourceId);
         request.setTargetId(resourceId);
 
+
+        requestedResources.add(resourceId);
+        startHealthChecker();
+
         nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         sendResourceMessage(request);
+        log.info("Sent request for resource {}", resourceId);
     }
 
      // požádání o více ZDROJŮ NAJEDNOU
