@@ -288,7 +288,12 @@ public class NodeMessageService {
             return;
         }
         
-        log.info("Starting health checker for resources: {}", requestedResources);
+        // konvertování resourceId na nodeId
+        Set<String> nodeIds = requestedResources.stream()
+            .map(resourceId -> resourceId.split("-")[0])
+            .collect(Collectors.toSet());
+        
+        log.info("Starting health checker for nodes: {}", nodeIds);
         
         Runnable onNodeFailure = () -> {
             log.error("Detected failure of resource node, resetting state");
@@ -296,7 +301,7 @@ public class NodeMessageService {
         };
 
         healthChecker = new HealthChecker(
-            requestedResources,
+            nodeIds, //stačí sledovat nodeId, protože s Node umírá i Resource
             onNodeFailure,
             appConfig
         );
@@ -305,7 +310,7 @@ public class NodeMessageService {
         healthCheckerThread.setDaemon(true);
         healthCheckerThread.start();
         
-        log.info("Health checker started for resources: {}", requestedResources);
+        log.info("Health checker started for nodes: {}", nodeIds);
     }
 
     private void stopHealthChecker() {
