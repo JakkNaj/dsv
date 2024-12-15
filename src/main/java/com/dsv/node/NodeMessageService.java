@@ -18,7 +18,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.LinkedList;
-
+import com.dsv.health.HealthChecker;
+import com.dsv.config.AppConfig;
 @Slf4j
 public class NodeMessageService {
     private final Channel channel;
@@ -28,6 +29,9 @@ public class NodeMessageService {
     private final Map<String, Queue<String>> resourceQueues;
     private Set<String> requestedResources;
     private Set<String> receivedQueues;
+    private Thread healthCheckerThread;
+    private HealthChecker healthChecker;
+    private AppConfig appConfig;
 
     @Getter
     @Setter
@@ -39,7 +43,7 @@ public class NodeMessageService {
     
     private static final String RESOURCE_EXCHANGE = "resources.topic";
     
-    public NodeMessageService(Channel channel, String nodeId, String exchangeName) {
+    public NodeMessageService(Channel channel, String nodeId, String exchangeName, AppConfig appConfig) {
         this.channel = channel;
         this.nodeId = nodeId;
         this.exchangeName = exchangeName;
@@ -47,6 +51,7 @@ public class NodeMessageService {
         this.resourceQueues = new ConcurrentHashMap<>();
         this.requestedResources = new HashSet<>();
         this.receivedQueues = new HashSet<>();
+        this.appConfig = appConfig;
     }
 
     public void handleMessage(String routingKey, byte[] body, AMQP.BasicProperties properties) {
@@ -139,7 +144,8 @@ public class NodeMessageService {
         
         nodeStatus = ENodeStatus.WAITING_FOR_RESOURCES_QUEUES;
         
-        // Vytvoření a odeslání zpráv
+        startHealthChecker();
+        
         resourceIds.forEach(resourceId -> {
             Message request = new Message();
             request.setSenderId(nodeId);
@@ -173,7 +179,7 @@ public class NodeMessageService {
         }
     }
 
-    // Pomocná metoda pro kontrolu, zda může node vstoupit do kritické sekce
+    // helper, zda může node vstoupit do kritické sekce
     private boolean canEnterCriticalSection(String resourceId) {
         Queue<String> queue = resourceQueues.get(resourceId);
         if (queue == null || queue.isEmpty()) {
@@ -262,11 +268,75 @@ public class NodeMessageService {
         }
     }
 
-// ----------------------- Gettery a settery ---------------------------------------------
+// ----------------------- Helpery ---------------------------------------------
 
     public String getResourceQueues() {
         return resourceQueues.entrySet().stream()
             .map(entry -> entry.getKey() + ": " + String.join(", ", entry.getValue()))
             .collect(Collectors.joining("\n"));
+    }
+
+    private void startHealthChecker() {
+        stopHealthChecker();
+        
+        if (requestedResources.isEmpty()) {
+            return;
+        }
+        
+        log.info("Starting health checker for resources: {}", requestedResources);
+        
+        Runnable onNodeFailure = () -> {
+            log.error("Detected failure of resource node, resetting state");
+            resetNodeState();
+        };
+
+        healthChecker = new HealthChecker(
+            requestedResources,
+            onNodeFailure,
+            appConfig
+        );
+
+        healthCheckerThread = new Thread(healthChecker);
+        healthCheckerThread.setDaemon(true);
+        healthCheckerThread.start();
+        
+        log.info("Health checker started for resources: {}", requestedResources);
+    }
+
+    private void stopHealthChecker() {
+        if (healthChecker != null) {
+            log.info("Stopping health checker");
+            healthChecker.stop();
+            healthChecker = null;
+        }
+        if (healthCheckerThread != null) {
+            healthCheckerThread.interrupt();
+            healthCheckerThread = null;
+        }
+    }
+
+    private void resetNodeState() {
+        log.info("Resetting node state to IDLE");
+        nodeStatus = ENodeStatus.IDLE;
+        
+        for (String resourceId : requestedResources) {
+            Message removeMsg = new Message();
+            removeMsg.setSenderId(nodeId);
+            removeMsg.setTargetId(resourceId);
+            removeMsg.setType(EMessageType.REMOVE_FROM_QUEUE);
+            removeMsg.setResourceId(resourceId);
+            
+            sendResourceMessage(removeMsg);
+        }
+        
+        requestedResources.clear();
+        receivedQueues.clear();
+        resourceQueues.clear();
+        
+        stopHealthChecker();
+    }
+
+    public void stop() {
+        stopHealthChecker();
     }
 }

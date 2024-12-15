@@ -10,4 +10,5 @@ public enum EMessageType {
     VALUE_RESPONSE,        // Odpověď na čtení kritické hodnoty
     PRELIMINARY_REQUEST,  // Předběžná žádost o zdroj
     QUEUE_UPDATE,        // Aktualizace fronty od zdroje
+    REMOVE_FROM_QUEUE,   // Požadavek na odstranění z fronty
 } 

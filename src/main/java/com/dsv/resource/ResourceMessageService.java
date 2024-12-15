@@ -52,6 +52,10 @@ public class ResourceMessageService {
                     log.info("Processing CONNECTION_TEST from node {}", message.getSenderId());
                     handleTestAccess(message);
                     break;
+                case REMOVE_FROM_QUEUE:
+                    log.info("Processing REMOVE_FROM_QUEUE from node {}", message.getSenderId());
+                    handleRemoveFromQueue(message);
+                    break;
                 default:
                     log.warn("Resource received unhandled message type: {}", message.getType());
             }
@@ -147,7 +151,7 @@ public class ResourceMessageService {
     }
 
     private void handleNodeFailure(String failedNodeId) {
-        log.warn("Node {} failed health check, releasing its resources", failedNodeId);
+        log.warn("Node {} failed health check, releasing it from resource queue", failedNodeId);
         
         if (resourceQueue.peek().equals(failedNodeId)) {
             stopHealthChecker();
@@ -217,6 +221,34 @@ public class ResourceMessageService {
 
     public void stop() {
         stopHealthChecker();
+    }
+
+    private void handleRemoveFromQueue(Message message) {
+        try {
+            String nodeToRemove = message.getSenderId();
+            if (resourceQueue.remove(nodeToRemove)) {
+                log.info("Removed node {} from queue", nodeToRemove);
+                
+                // Notify all remaining nodes about queue update
+                Message queueUpdate = new Message();
+                queueUpdate.setSenderId(resourceId);
+                queueUpdate.setType(EMessageType.QUEUE_UPDATE);
+                queueUpdate.setResourceId(resourceId);
+                queueUpdate.setContent(objectMapper.writeValueAsString(
+                    new ArrayList<>(resourceQueue)
+                ));
+                
+                for (String nodeId : resourceQueue) {
+                    queueUpdate.setTargetId(nodeId);
+                    sendNodeMessage(queueUpdate);
+                }
+                
+                log.info("Resource {} queue updated after removal of {}: {}", 
+                    resourceId, nodeToRemove, resourceQueue);
+            }
+        } catch (Exception e) {
+            log.error("Error handling remove from queue: {}", e.getMessage(), e);
+        }
     }
 
 } 

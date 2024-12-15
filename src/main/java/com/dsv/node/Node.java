@@ -2,7 +2,7 @@ package com.dsv.node;
 
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
-
+import com.dsv.config.AppConfig;
 
 @Slf4j
 public class Node {
@@ -11,16 +11,17 @@ public class Node {
     private final String exchangeName;
     private NodeMessageService messageService;
     private NodeController controller;
-    
-    public Node(String nodeId, Channel channel, String exchangeName) {
+    private AppConfig appConfig;
+    public Node(String nodeId, Channel channel, String exchangeName, AppConfig appConfig) {
         this.nodeId = nodeId;
         this.channel = channel;
         this.exchangeName = exchangeName;
+        this.appConfig = appConfig;
     }
     
     public void start(int port) {
         setupQueue();
-        this.messageService = new NodeMessageService(channel, nodeId, exchangeName);
+        this.messageService = new NodeMessageService(channel, nodeId, exchangeName, appConfig);
         controller = new NodeController(nodeId, messageService, port);
     }
     

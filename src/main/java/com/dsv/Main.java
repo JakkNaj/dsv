@@ -36,7 +36,7 @@ public class Main {
         
         // Initialize Node and Resource components
         String nodeId = nodeConfig.getId();
-        node = new Node(nodeId, channel, NODE_EXCHANGE);
+        node = new Node(nodeId, channel, NODE_EXCHANGE, config);
         
         // Only create resource if this node should have one
         if (nodeConfig.isResource()) {
