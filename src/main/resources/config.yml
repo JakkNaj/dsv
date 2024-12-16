@@ -47,12 +47,12 @@ nodes:
     ip: "192.168.3.62"
 
   "172.20.10.7":
-    id: "node6"
+    id: "node7"
     port: 7076 
     resource: true
     ip: "172.20.10.7"
   "172.20.10.5":
-    id: "macnode7"
+    id: "macnode5"
     port: 7077 
     resource: true
     ip: "172.20.10.5"
@@ -66,3 +66,8 @@ nodes:
     port: 7080
     resource: true
     ip: "172.20.10.10"
+  "172.20.10.11":
+    id: "node11"
+    port: 7081
+    resource: true
+    ip: "172.20.10.11"
