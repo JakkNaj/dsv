@@ -1,7 +1,7 @@
 # Distributed Node System with Local Lomet Algorithm
 
 ## Overview
-This distributed system implements a modified version of the Lomet algorithm for resource management across multiple nodes. The system uses a star topology with a RabbitMQ cluster at its center for message routing and queue management.
+The code is for one Node inside a distributed system that implements a modified version of the Lomet algorithm (local) for resource management across multiple nodes. The system uses a star topology with a RabbitMQ cluster at its center for message routing and queue management.
 
 ## System Architecture
 
