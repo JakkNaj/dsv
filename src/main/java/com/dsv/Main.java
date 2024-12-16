@@ -20,6 +20,7 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.util.StatusPrinter;
 import org.slf4j.LoggerFactory;
+import com.rabbitmq.client.Address;
 
 @Slf4j
 public class Main {
@@ -71,13 +72,22 @@ public class Main {
         try {
             RabbitConfig rmqConfig = config.getRabbitmq();
             
+            Address[] addresses = new Address[] {
+                new Address(rmqConfig.getHosts().get(0).getHost(), rmqConfig.getHosts().get(0).getPort()),
+                new Address(rmqConfig.getHosts().get(1).getHost(), rmqConfig.getHosts().get(1).getPort())
+            };
+            
             ConnectionFactory factory = new ConnectionFactory();
-            factory.setHost(rmqConfig.getHost());
-            factory.setPort(rmqConfig.getPort());
             factory.setUsername(rmqConfig.getUsername());
             factory.setPassword(rmqConfig.getPassword());
             
-            Connection connection = factory.newConnection();
+            factory.setAutomaticRecoveryEnabled(true);
+            factory.setNetworkRecoveryInterval(10000);
+            
+            factory.setConnectionTimeout(5000);
+            factory.setHandshakeTimeout(10000);
+            
+            Connection connection = factory.newConnection(addresses);
             channel = connection.createChannel();
             
             log.info("RabbitMQ channel established for node: {}", nodeConfig.getId());

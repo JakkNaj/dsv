@@ -1,6 +1,9 @@
 rabbitmq:
-  host: "172.20.10.8"
-  port: 5672
+  hosts:
+    - host: "172.20.10.8"
+      port: 5672
+    - host: "172.20.10.9"
+      port: 5672
   username: "myuser"
   password: "mypassword"
 
