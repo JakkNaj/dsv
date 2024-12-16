@@ -233,11 +233,12 @@ public class NodeMessageService {
         sendResourceMessage(releaseMessage);
         Queue<String> queue = resourceQueues.get(resourceId);
         queue.poll();
-        
+
         requestedResources.remove(resourceId);
         if (requestedResources.isEmpty()) {
             nodeStatus = ENodeStatus.IDLE;
             log.info("All resources released, changing state to IDLE");
+            resetNodeState();
         } else {
             nodeStatus = ENodeStatus.READY_TO_ENTER;
         }
