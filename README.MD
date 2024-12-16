@@ -69,6 +69,8 @@ This distributed system implements a modified version of the Lomet algorithm for
 ## Setup Instructions
 
 1. **RabbitMQ Cluster Setup**:
+   First run the VMs and see what IPs are assigned to them.
+   Then run the following scripts on both VMs (you will need to copy the Erlang cookie from rabbit1 to rabbit2)
    ```bash
    # On first server:
    ./rabbit1_setup.sh <rabbit1_ip> <rabbit2_ip>
@@ -78,6 +80,7 @@ This distributed system implements a modified version of the Lomet algorithm for
    ```
 
 2. **Configuration**:
+   Run the Node VMs and see what IPs are assigned to them.
    Edit `src/main/resources/config.yml`:
    ```yaml
    rabbitmq:
