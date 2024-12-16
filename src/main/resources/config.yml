@@ -1,5 +1,5 @@
 rabbitmq:
-  host: "192.168.3.227"
+  host: "172.20.10.8"
   port: 5672
   username: "myuser"
   password: "mypassword"
@@ -56,3 +56,13 @@ nodes:
     port: 7077 
     resource: true
     ip: "172.20.10.5"
+  "172.20.10.9":
+    id: "node9"
+    port: 7079
+    resource: true
+    ip: "172.20.10.9"
+  "172.20.10.10":
+    id: "node10"
+    port: 7080
+    resource: true
+    ip: "172.20.10.10"
