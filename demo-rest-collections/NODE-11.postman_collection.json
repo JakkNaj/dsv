@@ -1,0 +1,73 @@
+{
+	"info": {
+		"_postman_id": "cfada9ec-f2e1-435e-9917-3780d8e7d7cd",
+		"name": "NODE - 11",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "29103200"
+	},
+	"item": [
+		{
+			"name": "get status node 11",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://172.20.10.11:7081/status"
+			},
+			"response": []
+		},
+		{
+			"name": "n11 ask for own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node11-resource/request"
+			},
+			"response": []
+		},
+		{
+			"name": "n11 ask for resource-10",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node10-resource/request"
+			},
+			"response": []
+		},
+		{
+			"name": "ENTER own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node11-resource/enter"
+			},
+			"response": []
+		},
+		{
+			"name": "ENTER section resource-10",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node10-resource/enter"
+			},
+			"response": []
+		},
+		{
+			"name": "EXIT own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node11-resource/exit"
+			},
+			"response": []
+		},
+		{
+			"name": "EXIT section resource-10",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.11:7081/resource/node10-resource/exit"
+			},
+			"response": []
+		}
+	]
+}

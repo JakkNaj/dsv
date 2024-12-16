@@ -1,0 +1,109 @@
+{
+	"info": {
+		"_postman_id": "b479704e-2348-4860-a448-a791720a90d9",
+		"name": "NODE - 10",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "29103200"
+	},
+	"item": [
+		{
+			"name": "get status node 10",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://172.20.10.10:7080/status"
+			},
+			"response": []
+		},
+		{
+			"name": "n10 ask for own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node10-resource/request"
+			},
+			"response": []
+		},
+		{
+			"name": "n10 ask for resource-11",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node11-resource/request"
+			},
+			"response": []
+		},
+		{
+			"name": "ENTER own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node10-resource/enter"
+			},
+			"response": []
+		},
+		{
+			"name": "ENTER section resource-11",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node11-resource/enter"
+			},
+			"response": []
+		},
+		{
+			"name": "ENTER section resource-7",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node7-resource/enter"
+			},
+			"response": []
+		},
+		{
+			"name": "EXIT own resource",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node10-resource/exit"
+			},
+			"response": []
+		},
+		{
+			"name": "EXIT section resource-11",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node11-resource/exit"
+			},
+			"response": []
+		},
+		{
+			"name": "EXIT section resource-7",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://172.20.10.10:7080/resource/node7-resource/exit"
+			},
+			"response": []
+		},
+		{
+			"name": "ask - r7 and r11",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "[\n    \"node7-resource\",\n    \"node11-resource\"\n]",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://172.20.10.10:7080/resources/request"
+			},
+			"response": []
+		}
+	]
+}
